@@ -19,4 +19,4 @@ pipelines:
               - zip -r ${BITBUCKET_TAG}_linux.zip linux/*
               - zip -r ${BITBUCKET_TAG}_win64.zip win64/*
               - curl -X POST "https://${BITBUCKET_USERNAME}:${BITBUCKET_APP_PASSWORD}@api.bitbucket.org/2.0/repositories/danixu/${BITBUCKET_REPO_SLUG}/downloads" --form files=@"${BITBUCKET_TAG}_win64.zip"
-              - curl -X POST "https://${BITBUCKET_USERNAME}:${BITBUCKET_APP_PASSWORD}@api.bitbucket.org/2.0/repositories/${danixu}/${BITBUCKET_REPO_SLUG}/downloads" --form files=@"${BITBUCKET_TAG}_linux.zip"
+              - curl -X POST "https://${BITBUCKET_USERNAME}:${BITBUCKET_APP_PASSWORD}@api.bitbucket.org/2.0/repositories/danixu/${BITBUCKET_REPO_SLUG}/downloads" --form files=@"${BITBUCKET_TAG}_linux.zip"
