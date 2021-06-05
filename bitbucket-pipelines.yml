@@ -1,0 +1,22 @@
+# Template C++ Application
+
+# This template allows you to validate your C++ application.
+# The workflow allows running tests and code linting on the default branch.
+
+
+image: gcc:10.2
+
+
+pipelines:
+    tags:
+        "*":
+          - step:
+              name: Build and generate zip files
+              script:
+              - apt-get update && apt-get install -y mingw-w64 zip
+              - make
+              - cd release
+              - zip -r ${BITBUCKET_TAG}_linux.zip linux/*
+              - zip -r ${BITBUCKET_TAG}_win64.zip win64/*
+              - curl -X POST "https://${BITBUCKET_USERNAME}:${BITBUCKET_APP_PASSWORD}@api.bitbucket.org/2.0/repositories/danixu/${BITBUCKET_REPO_SLUG}/downloads" --form files=@"${BITBUCKET_TAG}_win64.zip"
+              - curl -X POST "https://${BITBUCKET_USERNAME}:${BITBUCKET_APP_PASSWORD}@api.bitbucket.org/2.0/repositories/danixu/${BITBUCKET_REPO_SLUG}/downloads" --form files=@"${BITBUCKET_TAG}_linux.zip"
