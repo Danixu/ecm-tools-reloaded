@@ -298,6 +298,10 @@ static int8_t ecmify(
     uint8_t* out_queue = NULL;
     size_t out_queue_current_ofs = 0;
 
+    // TOC buffer
+    uint8_t* toc_buffer = NULL;
+    size_t toc_buffer_current_ofs = 0;
+
     //
     // Current sector type (run)
     //
@@ -311,6 +315,7 @@ static int8_t ecmify(
 
     //off_t typetally[4] = {0,0,0,0};
 
+    /* Will be returned by the cleanup function depending of which level
     static const size_t sectorsize[] = {
         0,      // UNKNOWN
         2352,   // CDDA
@@ -324,6 +329,7 @@ static int8_t ecmify(
         2328,   // MODE2 XA 2
         4,      // MODE2 XA 2 GAP
     };
+    */
 
     // Buffers size
     size_t queue_size = ((size_t)(-1)) - 4095;
@@ -365,19 +371,30 @@ static int8_t ecmify(
     }
 
     //
-    // Allocate space for buffers
+    // Allocate input buffer space
     //
     in_queue = (uint8_t*) malloc(queue_size);
     if(!in_queue) {
         printf("Out of memory\n");
         return 1;
     }
-    out_queue = (uint8_t*) malloc(queue_size);
-    if(!out_queue) {
+    //
+    // Allocate toc buffer space. A few kbytes is enought for most of the situations, but 
+    // is not too much memory and is better to be sure
+    //
+    toc_buffer = (uint8_t*) malloc(0x500000); // A 5MB buffer to store the TOC
+    if(!toc_buffer) {
         printf("Out of memory\n");
         return 1;
     }
 
+    sector_tools sTools = sector_tools();
+
+    //
+    //
+    // Starting the analyzing part to generate the TOC header
+    //
+    //
     for(;;) {
         int8_t detected_type;
 
@@ -419,6 +436,157 @@ static int8_t ecmify(
                     return 1;
                 }
 
+                in_queue_bytes_available += readed;
+            }
+        }
+
+        if (in_queue_bytes_available == 0) {
+            // If analyze step is complete, just flush the data and exit the loop
+            detected_type = -1;
+        }
+        else {
+            detected_type = sTools.detect(in_queue + in_queue_current_ofs);
+        }
+
+        in_queue_current_ofs += 2352;
+        in_queue_bytes_available -= 2352;
+
+        if(
+            (detected_type == curtype) &&
+            (curtype_count <= 0x7FFFFFFF) // avoid overflow
+        ) {
+            //
+            // Same type as last sector
+            //
+            curtype_count++;
+        }
+        else {
+            if(curtype_count > 0) {
+                // Generate the sector mode data
+                printf("Generating curtype data. Type %d - count %d - pos %d\n", curtype, curtype_count, ftello(in));
+                uint8_t generated_bytes;
+                sTools.write_type_count(
+                    toc_buffer + toc_buffer_current_ofs,
+                    curtype,
+                    curtype_count,
+                    generated_bytes
+                );
+                toc_buffer_current_ofs += generated_bytes;
+            }
+
+            curtype = detected_type;
+            curtype_count = 1;
+        }
+
+        //
+        // if curtype is negative at this point, then the EOF is reached
+        //
+        if(curtype < 0) {
+            // Write the End of Data to TOC buffer
+            uint8_t generated_bytes;
+            sTools.write_type_count(
+                toc_buffer + toc_buffer_current_ofs,
+                0,
+                0,
+                generated_bytes
+            );
+            toc_buffer_current_ofs++;
+            break;
+        }
+    }
+
+    // Once the file is analyzed and we know the TOC, we will process al the data
+    //
+    // Allocate output space for buffer
+    out_queue = (uint8_t*) malloc(queue_size);
+    if(!out_queue) {
+        printf("Out of memory\n");
+        return 1;
+    }
+
+    // Add the Header to the output buffer
+    out_queue[0] = 'E';
+    out_queue[1] = 'C';
+    out_queue[2] = 'M';
+    out_queue[3] = 0x01; // ECM version. For now 0 is the original version and 1 the new version
+    // Copy the TOC buffer to the output buffer
+    memcpy(out_queue + 4, toc_buffer, toc_buffer_current_ofs);
+    // set the current output buffer position
+    out_queue_current_ofs = toc_buffer_current_ofs + 4;
+    // Reset the input file position
+    fseeko(in, 0, SEEK_SET);
+    in_queue_bytes_available = 0;
+    in_queue_current_ofs = 0;
+
+    printf("Writting output file\n");
+
+    //
+    //
+    // Starting the processing part
+    //
+    //
+    for (;;) {
+        // Flush the data to disk if there's no space for more sectors
+        if((queue_size - out_queue_current_ofs) < 2352) {
+            fwrite(out_queue, 1, out_queue_current_ofs, out);
+
+            if (ferror(out)) {
+                // Something happen while reading the input file
+                printfileerror(in, infilename);
+
+                // We will close both files before exit
+                if(in    != NULL) { fclose(in ); }
+                if(out   != NULL) { fclose(out); }
+                free(in_queue);
+                free(out_queue);
+                free(toc_buffer);
+
+                // Exit with error code
+                return 1;
+            }
+
+            out_queue_current_ofs = 0;
+        }
+
+        //
+        // Refill IN queue if necessary
+        //
+        if(
+            !feof(in) &&
+            (in_queue_bytes_available < 2352)
+        ) {
+            //
+            // We need to read more data
+            //
+            size_t willread = queue_size - in_queue_bytes_available;
+            
+            // If the queue offset 
+            if(in_queue_bytes_available > 0 && in_queue_current_ofs > 0) {
+                memmove(in_queue, in_queue + in_queue_current_ofs, in_queue_bytes_available);
+            }
+
+            in_queue_current_ofs = 0;
+            
+            if(willread) {
+                //setcounter_analyze(input_bytes_queued);
+
+                size_t readed = fread(in_queue + in_queue_bytes_available, 1, willread, in);
+                
+                if (ferror(in)) {
+                    // Something happen while reading the input file
+                    printfileerror(in, infilename);
+
+                    // We will close both files before exit
+                    if(in    != NULL) { fclose(in ); }
+                    if(out   != NULL) { fclose(out); }
+                    free(in_queue);
+                    free(out_queue);
+                    free(toc_buffer);
+
+                    // Exit with error code
+                    return 1;
+                }
+
                 /*
                 input_edc = edc_compute(
                     input_edc,
@@ -448,6 +616,7 @@ static int8_t ecmify(
             if(out   != NULL) { fclose(out); }
             free(in_queue);
             free(out_queue);
+            free(toc_buffer);
 
             printf("Finished!\n");
 
@@ -455,56 +624,25 @@ static int8_t ecmify(
         }
 
         // For now we will just copy the data from a buffer to another for testing
-        memcpy(out_queue + out_queue_current_ofs, in_queue + in_queue_current_ofs, 2352);
+        uint16_t output_size = 0;
+        sector_tools_types type = STT_CDDA;
+        sTools.clean_sector(out_queue + out_queue_current_ofs, in_queue + in_queue_current_ofs, type, output_size,
+            OO_REMOVE_SYNC |
+            OO_REMOVE_ADDR |
+            OO_REMOVE_MODE |
+            OO_REMOVE_BLANKS |
+            OO_REMOVE_REDUNDANT_FLAG |
+            OO_REMOVE_ECC |
+            OO_REMOVE_EDC |
+            OO_REMOVE_GAP
+        );
+        printf("Tamaño sector: %d\n", output_size);
+        //memcpy(out_queue + out_queue_current_ofs, in_queue + in_queue_current_ofs, 2352);
 
         in_queue_current_ofs += 2352;
         in_queue_bytes_available -= 2352;
-        out_queue_current_ofs += 2352;
-        
-        if((queue_size - out_queue_current_ofs) < 2352) {
-            fwrite(out_queue, 1, out_queue_current_ofs, out);
-
-            if (ferror(out)) {
-                // Something happen while reading the input file
-                printfileerror(in, infilename);
-
-                // We will close both files before exit
-                if(in    != NULL) { fclose(in ); }
-                if(out   != NULL) { fclose(out); }
-                free(in_queue);
-                free(out_queue);
-
-                // Exit with error code
-                return 1;
-            }
-
-            out_queue_current_ofs = 0;
-        }
+        out_queue_current_ofs += output_size;
     }
-
-    /*
-    uint16_t readed = fread(sector_buffer, 1, 2352, in);
-    uint8_t last_type = -1;
-    if (readed != 2352) {
-        printfileerror(in, infilename);
-        return 1;
-    }
-
-    sector_tools sTools = sector_tools();
-
-    while (readed) {
-        uint8_t type = sTools.detect(sector_buffer);
-        if (type != last_type) {
-            printf("New type detected (%d) at file position %d\n", type, ftell(in) - 2352);
-            last_type = type;
-        }
-
-        readed = fread(sector_buffer, 1, 2352, in);
-        if (readed != 2352) {
-            break;
-        }
-    }
-    */
 
     fclose(in);
     fclose(out);

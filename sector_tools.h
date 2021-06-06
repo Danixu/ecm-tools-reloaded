@@ -92,6 +92,7 @@
 #include <cstddef>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 // 
 // Return codes of the class methods
@@ -119,6 +120,26 @@ enum sector_tools_types {
 };
 
 //
+// Optimization options available
+//
+enum optimization_options : uint16_t {
+    OO_NONE                  = 0,    // Just copy the input. Surelly will not be used
+    OO_REMOVE_SYNC           = 1<<1, // Remove sync bytes (a.k.a first 12 bytes)
+    OO_REMOVE_ADDR           = 1<<2, // Remove the ADDR bytes
+    OO_REMOVE_MODE           = 1<<3, // Remove the MODE byte
+    OO_REMOVE_BLANKS         = 1<<4, // If sector type is a GAP, remove the data
+    OO_REMOVE_REDUNDANT_FLAG = 1<<5, // Remove the redundant copy of FLAG bytes in Mode 2 XA sectors
+    OO_REMOVE_ECC            = 1<<6, // Remove the ECC
+    OO_REMOVE_EDC            = 1<<7, // Remove the EDC
+    OO_REMOVE_GAP            = 1<<8  // If sector type is a GAP, remove the data
+};
+inline optimization_options operator|(optimization_options a, optimization_options b)
+{
+    return static_cast<optimization_options>(static_cast<uint16_t>(a) | static_cast<uint16_t>(b));
+}
+
+
+//
 // sector_tools Class
 //
 class sector_tools {
@@ -126,6 +147,19 @@ class sector_tools {
         // Public methods
         sector_tools();
         uint8_t detect(uint8_t* sector);
+        static int8_t write_type_count(
+            uint8_t* outBuffer,
+            int8_t type,
+            uint32_t count,
+            uint8_t& generated_bytes
+        );
+        static int8_t clean_sector(
+            uint8_t* out,
+            uint8_t* sector,
+            sector_tools_types type,
+            uint16_t& output_size,
+            optimization_options options
+        );
 
         // Public attributes
         int8_t last_sector_type = -1; 
