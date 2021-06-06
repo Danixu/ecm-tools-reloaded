@@ -105,7 +105,7 @@ enum sector_tools_returns {
 //
 // Sector types detectable by the class
 //
-enum sector_tools_types {
+enum sector_tools_types : uint8_t {
     STT_UNKNOWN = 0,
     STT_CDDA,
     STT_CDDA_GAP,
@@ -116,7 +116,8 @@ enum sector_tools_types {
     STT_MODE2_1,
     STT_MODE2_1_GAP,
     STT_MODE2_2,
-    STT_MODE2_2_GAP
+    STT_MODE2_2_GAP,
+    STT_LAST_ITEM       // This item will not be used for processing, but will be for counting the items
 };
 
 //
@@ -146,10 +147,10 @@ class sector_tools {
     public:
         // Public methods
         sector_tools();
-        uint8_t detect(uint8_t* sector);
+        sector_tools_types detect(uint8_t* sector);
         static int8_t write_type_count(
             uint8_t* outBuffer,
-            int8_t type,
+            sector_tools_types type,
             uint32_t count,
             uint8_t& generated_bytes
         );
@@ -159,6 +160,12 @@ class sector_tools {
             sector_tools_types type,
             uint16_t& output_size,
             optimization_options options
+        );
+        static int8_t read_type_count(
+            uint8_t* inBuffer,
+            sector_tools_types& type,
+            uint32_t& count,
+            uint8_t& readed_bytes
         );
 
         // Public attributes

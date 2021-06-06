@@ -288,6 +288,7 @@ static int8_t ecmify(
 ) {
     FILE* in  = NULL;
     FILE* out = NULL;
+    uint8_t return_code = 0;
 
     // Input buffer
     uint8_t* in_queue = NULL;
@@ -305,8 +306,9 @@ static int8_t ecmify(
     //
     // Current sector type (run)
     //
-    int8_t   curtype = -1; // not a valid type
-    uint32_t curtype_count = 0;
+    sector_tools_types curtype = STT_UNKNOWN; // not a valid type
+    uint32_t           curtype_count = 0;
+    uint32_t           curtype_total = 0;
     //off_t    curtype_in_start = 0;
 
     //off_t input_file_length;
@@ -396,7 +398,7 @@ static int8_t ecmify(
     //
     //
     for(;;) {
-        int8_t detected_type;
+        sector_tools_types detected_type;
 
         //
         // Refill queue if necessary
@@ -442,7 +444,7 @@ static int8_t ecmify(
 
         if (in_queue_bytes_available == 0) {
             // If analyze step is complete, just flush the data and exit the loop
-            detected_type = -1;
+            detected_type = STT_UNKNOWN;
         }
         else {
             detected_type = sTools.detect(in_queue + in_queue_current_ofs);
@@ -481,12 +483,12 @@ static int8_t ecmify(
         //
         // if curtype is negative at this point, then the EOF is reached
         //
-        if(curtype < 0) {
+        if(curtype == STT_UNKNOWN) {
             // Write the End of Data to TOC buffer
             uint8_t generated_bytes;
             sTools.write_type_count(
                 toc_buffer + toc_buffer_current_ofs,
-                0,
+                STT_UNKNOWN,
                 0,
                 generated_bytes
             );
@@ -504,6 +506,7 @@ static int8_t ecmify(
         return 1;
     }
 
+    printf("Writting header and TOC data to output buffer\n");
     // Add the Header to the output buffer
     out_queue[0] = 'E';
     out_queue[1] = 'C';
@@ -513,10 +516,13 @@ static int8_t ecmify(
     memcpy(out_queue + 4, toc_buffer, toc_buffer_current_ofs);
     // set the current output buffer position
     out_queue_current_ofs = toc_buffer_current_ofs + 4;
-    // Reset the input file position
+    // Reset the input file and TOC position
     fseeko(in, 0, SEEK_SET);
     in_queue_bytes_available = 0;
     in_queue_current_ofs = 0;
+    toc_buffer_current_ofs = 0;
+    // Reset the curtype_count to use it again
+    curtype_count = 0;
 
     printf("Writting output file\n");
 
@@ -599,34 +605,29 @@ static int8_t ecmify(
             }
         }
 
-        if (in_queue_bytes_available == 0) {
-            uint8_t return_code = 0;
-            // If there is data in output buffer, we will clear it first
-            if (out_queue_current_ofs) {
-                fwrite(out_queue, 1, out_queue_current_ofs, out);
-                if (ferror(out)) {
-                    // Something happen while reading the input file
-                    printfileerror(in, infilename);
-                    return_code = 1;
-                }
+        // Getting a new sector type from TOC if required
+        if (curtype_count == curtype_total) {
+            uint8_t readed_bytes = 0;
+            int8_t get_count = sTools.read_type_count(toc_buffer + toc_buffer_current_ofs, curtype, curtype_total, readed_bytes);
+
+            printf("TOC offset %d - Tipo de sector: %d - Total sectores: %d - Bytes leídos: %d\n", toc_buffer_current_ofs, curtype, curtype_total, readed_bytes);
+
+            if (get_count == -1) {
+                // There was an error getting the count (maybe corrupted file)
+                return_code = 1;
+                break;
             }
-
-            // We will close both files before exit
-            if(in    != NULL) { fclose(in ); }
-            if(out   != NULL) { fclose(out); }
-            free(in_queue);
-            free(out_queue);
-            free(toc_buffer);
-
-            printf("Finished!\n");
-
-            return return_code;
+            else if (!get_count) {
+                // End Of Toc reached, so file should be processed completly
+                break;
+            }
+            toc_buffer_current_ofs += readed_bytes;
+            curtype_count = 0;
         }
 
         // For now we will just copy the data from a buffer to another for testing
         uint16_t output_size = 0;
-        sector_tools_types type = STT_CDDA;
-        sTools.clean_sector(out_queue + out_queue_current_ofs, in_queue + in_queue_current_ofs, type, output_size,
+        sTools.clean_sector(out_queue + out_queue_current_ofs, in_queue + in_queue_current_ofs, curtype, output_size,
             OO_REMOVE_SYNC |
             OO_REMOVE_ADDR |
             OO_REMOVE_MODE |
@@ -636,19 +637,34 @@ static int8_t ecmify(
             OO_REMOVE_EDC |
             OO_REMOVE_GAP
         );
-        printf("Tamaño sector: %d\n", output_size);
         //memcpy(out_queue + out_queue_current_ofs, in_queue + in_queue_current_ofs, 2352);
+        if (curtype_total == 0) {
+            break;
+        }
 
         in_queue_current_ofs += 2352;
         in_queue_bytes_available -= 2352;
         out_queue_current_ofs += output_size;
+        curtype_count++;
+    }
+
+    // If there is data in output buffer, we will clear it first
+    if (out_queue_current_ofs) {
+        fwrite(out_queue, 1, out_queue_current_ofs, out);
+        if (ferror(out)) {
+            // Something happen while reading the input file
+            printfileerror(in, infilename);
+            return_code = 1;
+        }
     }
 
     fclose(in);
     fclose(out);
     free(in_queue);
     free(out_queue);
-    return 0;
+    free(toc_buffer);
+    printf("Finished!\n");
+    return return_code;
 }
 
 
