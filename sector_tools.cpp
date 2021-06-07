@@ -136,6 +136,21 @@ sector_tools_types sector_tools::detect(uint8_t* sector) {
 
 
 ////////////////////////////////////////////////////////////////////////////////
+// Detects the stream type using the sector type
+sector_tools_stream_types sector_tools::detect_stream(sector_tools_types type) {
+    switch (type){
+        case STT_CDDA:
+        case STT_CDDA_GAP:
+            return STST_AUDIO;
+            break;
+        
+        default:
+            return STST_DATA;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
 // Detects if sectors are zeroed (GAP)
 bool sector_tools::is_gap(uint8_t *sector, uint32_t length) {
     for (uint16_t i = 0; i < length; i++) {
@@ -261,7 +276,6 @@ int8_t sector_tools::write_type_count(
     uint32_t count,
     uint8_t& generated_bytes
 ) {
-    count--;
     generated_bytes = 0; // We will set the generated_bytes counter to 0
 
     // Generating the first byte wich contains the type and a number up to 15
@@ -269,7 +283,7 @@ int8_t sector_tools::write_type_count(
     outBuffer[generated_bytes] = ((count >= 8) << 7) | ((count & 7) << 4) | type;
     generated_bytes++; // Now we are in position 1
 
-    count >>= 3; // We will shift the counter 4 positions to right (same as divide by 16)
+    count >>= 3; // We will shift the counter 3 positions to right (same as divide by 8)
 
     // While the counter is not 0
     while(count) {
@@ -284,6 +298,42 @@ int8_t sector_tools::write_type_count(
     return 0;
 }
 
+// Overload for stream type
+int8_t sector_tools::write_type_count(
+    uint8_t* outBuffer,
+    sector_tools_stream_types type,
+    uint32_t count,
+    uint8_t& generated_bytes
+) {
+    generated_bytes = 0; // We will set the generated_bytes counter to 0
+
+    // Generating the first byte wich contains the type and a number up to 15
+    // First bit is used as a "more exists" mark
+    outBuffer[generated_bytes] = ((count >= 32) << 7) | ((count & 31) << 2) | type;
+    generated_bytes++; // Now we are in position 1
+
+    count >>= 5; // We will shift the counter 5 positions to right (same as divide by 32)
+
+    // While the counter is not 0
+    while(count) {
+        outBuffer[generated_bytes] = ((count >= 128) << 7) | (count & 127);
+        generated_bytes++; // one more byte
+
+        count >>= 7; // same as divide by 128
+    }
+    //
+    // Success
+    //
+    return 0;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+//
+// Read a type/count combo
+//
+// Returns nonzero on error
+//
 int8_t sector_tools::read_type_count(
     uint8_t* inBuffer,
     sector_tools_types& type,
@@ -312,16 +362,58 @@ int8_t sector_tools::read_type_count(
         count |= ((uint32_t)(c & 0x7F)) << bits;
         bits += 7;
     }
-    if(count == 0xFFFFFFFF) {
+    if(count == 0x0) {
         // End indicator
         return 0;
     }
-    // If not is the end indicator, we will add 1
-    count++;
 
     return 1;
 }
 
+// Overload for stream type
+int8_t sector_tools::read_type_count(
+    uint8_t* inBuffer,
+    sector_tools_stream_types& type,
+    uint32_t& count,
+    uint8_t& readed_bytes
+) {
+    readed_bytes = 0;
+    int c = inBuffer[readed_bytes];
+    readed_bytes++;
+    int bits = 5;
+
+    type = (sector_tools_stream_types)(c & 0x3);
+    count = (c >> 2) & 0x1F;
+
+    while(c & 0x80) {
+        c = inBuffer[readed_bytes];
+        readed_bytes++;
+
+        if(
+            (bits > 31) ||
+            ((uint32_t)(c & 0x7F)) >= (((uint32_t)0x80000000LU) >> (bits-1))
+        ) {
+            printf("Invalid sector count\n");
+            return -1;
+        }
+        count |= ((uint32_t)(c & 0x7F)) << bits;
+        bits += 7;
+    }
+    if(count == 0x0) {
+        // End indicator
+        return 0;
+    }
+
+    return 1;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+//
+// Remove non required data from a sector depending of options
+//
+// Returns nonzero on error
+//
 int8_t sector_tools::clean_sector(
     uint8_t* out,
     uint8_t* sector,
@@ -338,7 +430,6 @@ int8_t sector_tools::clean_sector(
                 memcpy(out, sector, 2352);
                 output_size = 2352;
             }
-            printf("Copied: %d\n", output_size);
             break;
 
         case STT_MODE1:

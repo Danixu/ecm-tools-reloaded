@@ -116,8 +116,16 @@ enum sector_tools_types : uint8_t {
     STT_MODE2_1,
     STT_MODE2_1_GAP,
     STT_MODE2_2,
-    STT_MODE2_2_GAP,
-    STT_LAST_ITEM       // This item will not be used for processing, but will be for counting the items
+    STT_MODE2_2_GAP
+};
+
+//
+// Stream types detectable by the class
+//
+enum sector_tools_stream_types : uint8_t {
+    STST_UNKNOWN = 0,
+    STST_AUDIO,
+    STST_DATA
 };
 
 //
@@ -148,11 +156,30 @@ class sector_tools {
         // Public methods
         sector_tools();
         sector_tools_types detect(uint8_t* sector);
+        static sector_tools_stream_types detect_stream(sector_tools_types type);
         static int8_t write_type_count(
             uint8_t* outBuffer,
             sector_tools_types type,
             uint32_t count,
             uint8_t& generated_bytes
+        );
+        static int8_t write_type_count(
+            uint8_t* outBuffer,
+            sector_tools_stream_types type,
+            uint32_t count,
+            uint8_t& generated_bytes
+        );
+        static int8_t read_type_count(
+            uint8_t* inBuffer,
+            sector_tools_types& type,
+            uint32_t& count,
+            uint8_t& readed_bytes
+        );
+        static int8_t read_type_count(
+            uint8_t* inBuffer,
+            sector_tools_stream_types& type,
+            uint32_t& count,
+            uint8_t& readed_bytes
         );
         static int8_t clean_sector(
             uint8_t* out,
@@ -160,12 +187,6 @@ class sector_tools {
             sector_tools_types type,
             uint16_t& output_size,
             optimization_options options
-        );
-        static int8_t read_type_count(
-            uint8_t* inBuffer,
-            sector_tools_types& type,
-            uint32_t& count,
-            uint8_t& readed_bytes
         );
 
         // Public attributes

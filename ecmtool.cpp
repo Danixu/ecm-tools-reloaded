@@ -34,13 +34,27 @@ static int8_t ecmify(
     const char* outfilename,
     const bool force_rewrite
 );
+static void resetcounter(off_t total);
+static void encode_progress(void);
+static void decode_progress(void);
+static void setcounter_analyze(off_t n);
+static void setcounter_encode(off_t n);
+static void setcounter_decode(off_t n);
+
+
+
+
+// Some necessary variables
+static off_t mycounter_analyze = (off_t)-1;
+static off_t mycounter_encode  = (off_t)-1;
+static off_t mycounter_decode  = (off_t)-1;
+static off_t mycounter_total   = 0;
 
 
 ////////////////////////////////////////////////////////////////////////////////
 //
 // Returns nonzero on error
 //
-
 ////////////////////////////////////////////////////////////////////////////////
 
 static struct option long_options[] = {
@@ -103,7 +117,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // The in file is an ECM file, so will be decoded
+    // The in file is an ECM file, will be decoded
     FILE* in  = NULL;
     in = fopen(infilename, "rb");
     if (!in) {
@@ -116,7 +130,7 @@ int main(int argc, char** argv) {
             (fgetc(in) == 'C') &&
             (fgetc(in) == 'M')
         ) {
-            printf("An ECM file was detected, so will be decoded\n");
+            printf("An ECM file was detected... will be decoded\n");
             decode = true;
 
             if (fgetc(in) == 0x00) {
@@ -125,7 +139,7 @@ int main(int argc, char** argv) {
             }
         }
         else {
-            printf("A BIN file was detected, so will be encoded\n");
+            printf("A BIN file was detected... will be encoded\n");
         }
         fclose(in);
     }
@@ -172,112 +186,6 @@ int main(int argc, char** argv) {
 
     ecmify(infilename, outfilename, force_rewrite);
 
-    
-
-
-/*
-    // The in file is an ECM file, so will be decoded
-    FILE* in  = NULL;
-    in = fopen(infilename, "rb");
-    if (!in) {
-        printfileerror(in, infilename);
-        return 1;
-    }
-    else {
-        if(
-            (fgetc(in) == 'E') &&
-            (fgetc(in) == 'C') &&
-            (fgetc(in) == 'M')
-        ) {
-            printf("An ECM file was detected, so will be decoded\n");
-            decode = true;
-
-            if (fgetc(in) == 0x00) {
-                // The file is in the old format, so compatibility will be enabled
-                compatible = true;
-            }
-        }
-        else {
-            printf("A BIN file was detected, so will be encoded\n");
-        }
-        fclose(in);
-    }
-
-    // If not output filename was provided, we will generate one
-    // based in the original filename.
-    if (outfilename == NULL) {
-        tempfilename = malloc(strlen(infilename) + 7);
-        if(!tempfilename) {
-            printf("Out of memory\n");
-            return 1;
-        }
-
-        strcpy(tempfilename, infilename);
-
-        if(decode) {
-            //
-            // Remove ".ecm" from the input filename
-            //
-            size_t l = strlen(tempfilename);
-            if(
-                (l > 4) &&
-                tempfilename[l - 4] == '.' &&
-                tolower(tempfilename[l - 3]) == 'e' &&
-                tolower(tempfilename[l - 2]) == 'c' &&
-                tolower(tempfilename[l - 1]) == 'm'
-            ) {
-                tempfilename[l - 4] = 0;
-            } else {
-                //
-                // If that fails, append ".unecm" to the input filename
-                //
-                strcat(tempfilename, ".unecm");
-            }
-        }
-        else {
-            //
-            // Append ".ecm" to the input filename
-            //
-            strcat(tempfilename, ".ecm");
-        }
-        outfilename = tempfilename;
-    }
-
-    //
-    // Initialize the ECC/EDC tables
-    //
-    eccedc_init();
-
-    //
-    // Go!
-    //
-    uint8_t status = 0;
-    if(decode) {
-        if (compatible) {
-            // Using the old method
-            if(old_unecmify(infilename, outfilename)) { status = 1; }
-        }
-        else {
-            // Using the new method
-            if(unecmify(infilename, outfilename)) { status = 1; }
-        }
-    } else {
-        if (compatible) {
-            // Using the old method
-            if(old_ecmify(infilename, outfilename)) { status = 1; }
-        }
-        else {
-            // Using the new method
-            if(ecmify(infilename, outfilename)) { status = 1; }
-        }
-    }
-
-    //
-    // Success
-    //
-    if(tempfilename) { free(tempfilename); }
-    return status;
-    */
 }
 
 
@@ -299,9 +207,14 @@ static int8_t ecmify(
     uint8_t* out_queue = NULL;
     size_t out_queue_current_ofs = 0;
 
-    // TOC buffer
-    uint8_t* toc_buffer = NULL;
-    size_t toc_buffer_current_ofs = 0;
+    // Sectors TOC buffer
+    uint8_t* sectors_toc_buffer = NULL;
+    size_t sectors_toc_buffer_current_ofs = 0;
+
+    // Streams TOC buffer
+    uint8_t* streams_toc_buffer = NULL;
+    size_t streams_toc_buffer_current_ofs = 0;
+    sector_tools_stream_types curstreamtype = STST_UNKNOWN; // not a valid type
 
     //
     // Current sector type (run)
@@ -309,29 +222,6 @@ static int8_t ecmify(
     sector_tools_types curtype = STT_UNKNOWN; // not a valid type
     uint32_t           curtype_count = 0;
     uint32_t           curtype_total = 0;
-    //off_t    curtype_in_start = 0;
-
-    //off_t input_file_length;
-    //off_t input_bytes_checked = 0;
-    //off_t input_bytes_queued  = 0;
-
-    //off_t typetally[4] = {0,0,0,0};
-
-    /* Will be returned by the cleanup function depending of which level
-    static const size_t sectorsize[] = {
-        0,      // UNKNOWN
-        2352,   // CDDA
-        0,      // CDDA GAP
-        2048,   // MODE1
-        0,      // MODE1 GAP
-        2336,   // MODE2
-        0,      // MODE2 GAP
-        2052,   // MODE2 XA 1
-        4,      // MODE2 XA 1 GAP
-        2328,   // MODE2 XA 2
-        4,      // MODE2 XA 2 GAP
-    };
-    */
 
     // Buffers size
     size_t queue_size = ((size_t)(-1)) - 4095;
@@ -357,7 +247,8 @@ static int8_t ecmify(
     // We will check if image is a CD-ROM
     // CD-ROMS sectors are 2352 bytes size and are always filled, so image size must be multiple
     fseeko(in, 0, SEEK_END);
-    if (ftello(in) % 2352) {
+    size_t in_total_size = ftello(in);
+    if (in_total_size % 2352) {
         printf("ERROR: The input file doesn't appear to be a CD-ROM image\n");
         printf("       This program only allows to process CD-ROM images\n");
 
@@ -365,6 +256,8 @@ static int8_t ecmify(
         return 1;
     }
     fseeko(in, 0, SEEK_SET);
+    // Reset the counters
+    resetcounter(in_total_size);
 
     out = fopen(outfilename, "wb");
     if (!out) {
@@ -372,20 +265,25 @@ static int8_t ecmify(
         return 1;
     }
 
-    //
     // Allocate input buffer space
-    //
     in_queue = (uint8_t*) malloc(queue_size);
     if(!in_queue) {
         printf("Out of memory\n");
         return 1;
     }
-    //
-    // Allocate toc buffer space. A few kbytes is enought for most of the situations, but 
+
+    // Allocate sectors toc buffer space. A few kbytes is enought for most of the situations, but 
     // is not too much memory and is better to be sure
-    //
-    toc_buffer = (uint8_t*) malloc(0x500000); // A 5MB buffer to store the TOC
-    if(!toc_buffer) {
+    sectors_toc_buffer = (uint8_t*) malloc(0x80000); // A 512Kb buffer to store the sectors TOC
+    if(!sectors_toc_buffer) {
+        printf("Out of memory\n");
+        return 1;
+    }
+
+    // Allocate stream toc buffer space. A few kbytes is enought for most of the situations, but 
+    // is not too much memory and is better to be sure
+    streams_toc_buffer = (uint8_t*) malloc(0x40000); // A 256Kb buffer to store the stream TOC
+    if(!streams_toc_buffer) {
         printf("Out of memory\n");
         return 1;
     }
@@ -393,23 +291,17 @@ static int8_t ecmify(
     sector_tools sTools = sector_tools();
 
     //
-    //
     // Starting the analyzing part to generate the TOC header
     //
-    //
-    for(;;) {
+    while (!return_code) {
         sector_tools_types detected_type;
 
-        //
         // Refill queue if necessary
-        //
         if(
             !feof(in) &&
             (in_queue_bytes_available < 2352)
         ) {
-            //
             // We need to read more data
-            //
             size_t willread = queue_size - in_queue_bytes_available;
             
             // If the queue offset 
@@ -420,30 +312,24 @@ static int8_t ecmify(
             in_queue_current_ofs = 0;
             
             if(willread) {
-                //setcounter_analyze(input_bytes_queued);
-
                 size_t readed = fread(in_queue + in_queue_bytes_available, 1, willread, in);
                 
                 if (ferror(in)) {
                     // Something happen while reading the input file
                     printfileerror(in, infilename);
 
-                    // We will close both files before exit
-                    if(in    != NULL) { fclose(in ); }
-                    if(out   != NULL) { fclose(out); }
-                    free(in_queue);
-                    free(out_queue);
-
                     // Exit with error code
-                    return 1;
+                    return_code = 1;
                 }
+
+                setcounter_analyze(ftello(in));
 
                 in_queue_bytes_available += readed;
             }
         }
 
-        if (in_queue_bytes_available == 0) {
-            // If analyze step is complete, just flush the data and exit the loop
+        if (in_queue_bytes_available == 0 && feof(in)) {
+            // If there are no bytes in queue and EOF was reached, break the loop
             detected_type = STT_UNKNOWN;
         }
         else {
@@ -457,42 +343,61 @@ static int8_t ecmify(
             (detected_type == curtype) &&
             (curtype_count <= 0x7FFFFFFF) // avoid overflow
         ) {
-            //
             // Same type as last sector
-            //
             curtype_count++;
         }
         else {
             if(curtype_count > 0) {
                 // Generate the sector mode data
-                printf("Generating curtype data. Type %d - count %d - pos %d\n", curtype, curtype_count, ftello(in));
                 uint8_t generated_bytes;
                 sTools.write_type_count(
-                    toc_buffer + toc_buffer_current_ofs,
+                    sectors_toc_buffer + sectors_toc_buffer_current_ofs,
                     curtype,
                     curtype_count,
                     generated_bytes
                 );
-                toc_buffer_current_ofs += generated_bytes;
+                sectors_toc_buffer_current_ofs += generated_bytes;
+
+                // Checking if the stream type is different than the last one
+                sector_tools_stream_types stream_type = sTools.detect_stream(curtype);
+                if (stream_type != curstreamtype) {
+                    uint8_t generated_bytes;
+                    uint32_t current_in = ftello(in) - in_queue_bytes_available;
+                    sTools.write_type_count(
+                        streams_toc_buffer + streams_toc_buffer_current_ofs,
+                        stream_type,
+                        current_in,
+                        generated_bytes
+                    );
+                    streams_toc_buffer_current_ofs += generated_bytes;
+                    curstreamtype = stream_type;
+                }
             }
 
             curtype = detected_type;
             curtype_count = 1;
         }
 
-        //
         // if curtype is negative at this point, then the EOF is reached
-        //
         if(curtype == STT_UNKNOWN) {
-            // Write the End of Data to TOC buffer
+            // Write the End of Data to Sectors TOC buffer
             uint8_t generated_bytes;
             sTools.write_type_count(
-                toc_buffer + toc_buffer_current_ofs,
+                sectors_toc_buffer + sectors_toc_buffer_current_ofs,
                 STT_UNKNOWN,
                 0,
                 generated_bytes
             );
-            toc_buffer_current_ofs++;
+            sectors_toc_buffer_current_ofs++;
+
+            // Write the End of Data to Streams TOC buffer
+            sTools.write_type_count(
+                streams_toc_buffer + streams_toc_buffer_current_ofs,
+                STST_UNKNOWN,
+                0,
+                generated_bytes
+            );
+            streams_toc_buffer_current_ofs += generated_bytes;
             break;
         }
     }
@@ -506,32 +411,33 @@ static int8_t ecmify(
         return 1;
     }
 
-    printf("Writting header and TOC data to output buffer\n");
+    //printf("Writting header and TOC data to output buffer\n");
     // Add the Header to the output buffer
     out_queue[0] = 'E';
     out_queue[1] = 'C';
     out_queue[2] = 'M';
     out_queue[3] = 0x01; // ECM version. For now 0 is the original version and 1 the new version
-    // Copy the TOC buffer to the output buffer
-    memcpy(out_queue + 4, toc_buffer, toc_buffer_current_ofs);
+    // Copy the Streams TOC buffer to the output buffer
+    memcpy(out_queue + 4, streams_toc_buffer, streams_toc_buffer_current_ofs);
     // set the current output buffer position
-    out_queue_current_ofs = toc_buffer_current_ofs + 4;
+    out_queue_current_ofs = streams_toc_buffer_current_ofs + 4;
+    // Copy the Sectors TOC buffer to the output buffer
+    memcpy(out_queue + out_queue_current_ofs, sectors_toc_buffer, sectors_toc_buffer_current_ofs);
+    // set the current output buffer position
+    out_queue_current_ofs += sectors_toc_buffer_current_ofs;
+
     // Reset the input file and TOC position
     fseeko(in, 0, SEEK_SET);
     in_queue_bytes_available = 0;
     in_queue_current_ofs = 0;
-    toc_buffer_current_ofs = 0;
+    sectors_toc_buffer_current_ofs = 0;
     // Reset the curtype_count to use it again
     curtype_count = 0;
 
-    printf("Writting output file\n");
-
-    //
     //
     // Starting the processing part
     //
-    //
-    for (;;) {
+    while (!return_code) {
         // Flush the data to disk if there's no space for more sectors
         if((queue_size - out_queue_current_ofs) < 2352) {
             fwrite(out_queue, 1, out_queue_current_ofs, out);
@@ -540,30 +446,19 @@ static int8_t ecmify(
                 // Something happen while reading the input file
                 printfileerror(in, infilename);
 
-                // We will close both files before exit
-                if(in    != NULL) { fclose(in ); }
-                if(out   != NULL) { fclose(out); }
-                free(in_queue);
-                free(out_queue);
-                free(toc_buffer);
-
                 // Exit with error code
-                return 1;
+                return_code = 1;
             }
 
             out_queue_current_ofs = 0;
         }
 
-        //
         // Refill IN queue if necessary
-        //
         if(
             !feof(in) &&
             (in_queue_bytes_available < 2352)
         ) {
-            //
             // We need to read more data
-            //
             size_t willread = queue_size - in_queue_bytes_available;
             
             // If the queue offset 
@@ -574,23 +469,14 @@ static int8_t ecmify(
             in_queue_current_ofs = 0;
             
             if(willread) {
-                //setcounter_analyze(input_bytes_queued);
-
                 size_t readed = fread(in_queue + in_queue_bytes_available, 1, willread, in);
                 
                 if (ferror(in)) {
                     // Something happen while reading the input file
                     printfileerror(in, infilename);
 
-                    // We will close both files before exit
-                    if(in    != NULL) { fclose(in ); }
-                    if(out   != NULL) { fclose(out); }
-                    free(in_queue);
-                    free(out_queue);
-                    free(toc_buffer);
-
                     // Exit with error code
-                    return 1;
+                    return_code = 1;
                 }
 
                 /*
@@ -601,6 +487,7 @@ static int8_t ecmify(
                 );
                 */
 
+                setcounter_encode(ftello(in));
                 in_queue_bytes_available += readed;
             }
         }
@@ -608,20 +495,22 @@ static int8_t ecmify(
         // Getting a new sector type from TOC if required
         if (curtype_count == curtype_total) {
             uint8_t readed_bytes = 0;
-            int8_t get_count = sTools.read_type_count(toc_buffer + toc_buffer_current_ofs, curtype, curtype_total, readed_bytes);
-
-            printf("TOC offset %d - Tipo de sector: %d - Total sectores: %d - Bytes leídos: %d\n", toc_buffer_current_ofs, curtype, curtype_total, readed_bytes);
+            int8_t get_count = sTools.read_type_count(sectors_toc_buffer + sectors_toc_buffer_current_ofs, curtype, curtype_total, readed_bytes);
 
             if (get_count == -1) {
                 // There was an error getting the count (maybe corrupted file)
                 return_code = 1;
-                break;
             }
             else if (!get_count) {
                 // End Of Toc reached, so file should be processed completly
+                if (!feof(in) || in_queue_bytes_available) {
+                    printf("\n\nThere was an error processing the input file...\n");
+                    return_code = 1;
+                }
+
                 break;
             }
-            toc_buffer_current_ofs += readed_bytes;
+            sectors_toc_buffer_current_ofs += readed_bytes;
             curtype_count = 0;
         }
 
@@ -648,7 +537,7 @@ static int8_t ecmify(
         curtype_count++;
     }
 
-    // If there is data in output buffer, we will clear it first
+    // If there is data in the output buffer, we will flush it first
     if (out_queue_current_ofs) {
         fwrite(out_queue, 1, out_queue_current_ofs, out);
         if (ferror(out)) {
@@ -662,8 +551,9 @@ static int8_t ecmify(
     fclose(out);
     free(in_queue);
     free(out_queue);
-    free(toc_buffer);
-    printf("Finished!\n");
+    free(sectors_toc_buffer);
+    free(streams_toc_buffer);
+    printf("\n\nFinished!\n");
     return return_code;
 }
 
@@ -690,4 +580,51 @@ void print_help() {
         "    -f/--force\n"
         "           Force to ovewrite the output file\n"
     );
+}
+
+static void resetcounter(off_t total) {
+    mycounter_analyze = (off_t)-1;
+    mycounter_encode  = (off_t)-1;
+    mycounter_decode  = (off_t)-1;
+    mycounter_total   = total;
+}
+
+static void encode_progress(void) {
+    off_t a = (mycounter_analyze + 64) / 128;
+    off_t e = (mycounter_encode  + 64) / 128;
+    off_t t = (mycounter_total   + 64) / 128;
+    if(!t) { t = 1; }
+    fprintf(stderr,
+        "Analyze(%02u%%) Encode(%02u%%)\r",
+        (unsigned)((((off_t)100) * a) / t),
+        (unsigned)((((off_t)100) * e) / t)
+    );
+}
+
+static void decode_progress(void) {
+    off_t d = (mycounter_decode  + 64) / 128;
+    off_t t = (mycounter_total   + 64) / 128;
+    if(!t) { t = 1; }
+    fprintf(stderr,
+        "Decode(%02u%%)\r",
+        (unsigned)((((off_t)100) * d) / t)
+    );
+}
+
+static void setcounter_analyze(off_t n) {
+    int8_t p = ((n >> 20) != (mycounter_analyze >> 20));
+    mycounter_analyze = n;
+    if(p) { encode_progress(); }
+}
+
+static void setcounter_encode(off_t n) {
+    int8_t p = ((n >> 20) != (mycounter_encode >> 20));
+    mycounter_encode = n;
+    if(p) { encode_progress(); }
+}
+
+static void setcounter_decode(off_t n) {
+    int8_t p = ((n >> 20) != (mycounter_decode >> 20));
+    mycounter_decode = n;
+    if(p) { decode_progress(); }
 }
