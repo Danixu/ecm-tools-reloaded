@@ -24,14 +24,19 @@ By Daniel Carrasco (https://www.electrosoftcloud.com)
 
 # Changelog
 
-### 20200607
+### 20210608
+
+* Added CRC to verify the file integrity after decoding
+* Changed some class methods to public because are required in CRC and decoding process
+
+### 20210607
 
 * Added the progress indicator based in the original indicator.
 * Now the program also creates an stream information to be used in the future
 * The original EOD indicator creates a 5 bytes data. Changed to 0x00 that only uses 1 byte.
 * Some fixes
 
-### 20200606
+### 20210606
 
 * Because the limitations of the original ECM code for the features I want, I have decided to recreate the whole program. It still based in original ECM code, but a lot of things were changed.
 * Renamed to ecmtool and added some arguments. To have two binaries is not required anymore.
@@ -46,6 +51,7 @@ By Daniel Carrasco (https://www.electrosoftcloud.com)
 * Add the decode process
 * ~~Improve the sector mode detection, to detect all known CD-ROM/CDDA sectors~~
 * ~~Add buffered output to write in chunks and speed up the process~~
+* Try to use mmap instead manual buffers to see if works faster.
 * Add options to compress the stream directly instead to have to use external programs
 * Convert the program into a library to make it usable by another programs (for now is a class).
 * Try to ~~detect and~~ compress CDDA tracks using FLAC, APE, or similar.

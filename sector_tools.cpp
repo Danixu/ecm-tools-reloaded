@@ -172,6 +172,13 @@ uint32_t sector_tools::get32lsb(const uint8_t* src) {
         (((uint32_t)(src[3])) << 24);
 }
 
+void sector_tools::put32lsb(uint8_t* dest, uint32_t value) {
+    dest[0] = (uint8_t)(value      );
+    dest[1] = (uint8_t)(value >>  8);
+    dest[2] = (uint8_t)(value >> 16);
+    dest[3] = (uint8_t)(value >> 24);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 //
 // LUTs used for computing ECC/EDC

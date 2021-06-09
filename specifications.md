@@ -28,10 +28,9 @@ Every stream in the TOC will contains the following data.
 | Data type   | Position  | Description                                                                            |
 |-------------|-----------|----------------------------------------------------------------------------------------|
 | Stream Info | 0x00      | This byte contains the info about the stream (type, compression)                       |
-| Size        | 0x01 - ?? | The size of the stream in the ecm file to detect when the program have to stop reading |
-| Sectors     | ??   - ?? | An stream of bytes ended by 0x00 with the number of sectors that contains the stream   |
+| Size        | 0x01 - ?? | The size of the stream in the ecm file to detect when the program must stop reading    |
 
-A 0x00 byte will be added at the end of the Streams TOC (At the end of all, not in every).
+A 0x00 byte will be added at the end of the Streams TOC (At the end of all, not in every). The first bit of the Count bytes will be used to store the "continuation" byte, wich will tell the program to continue reading the next byte. This will limit the number stored in those bytes up to 128 instead the size of an uint8_t variable (256).
 
 ### Sectors TOC
 
@@ -42,7 +41,7 @@ The sectors TOC is a list of kind of sectors detected in the original file, whic
 | Sector info and count | 0x00      | The sector type and part of the count (3 bits). The count divided by 8 will be stored here                 |
 | Count                 | 0x01 - ?? | The rest of the count bytes. If the sectors count is bigger than 8, will be stored in the following bytes  |
 
-The first bit of the Count bytes will be used to store the "continuation" byte, wich will tell the program to continue reading the next byte. This will limit the number stored in those bytes up to 128 instead the size of an uint8_t variable (256).
+The first bit of the Count bytes will be used to store the "continuation" byte, wich will tell the program to continue reading the next byte. This will limit the number stored in those bytes up to 128 instead the size of an uint8_t variable (256). This stream also ends by 0x00 to mark the EOD.
 
 ### Data
 

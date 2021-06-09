@@ -88,6 +88,7 @@
 // EDC:   Error Detection Code
 // ECC:   Error Correction Code
 //
+// First sector address looks like is always 00:02:00, so we will use this number on it
 
 #include <cstddef>
 #include <stdint.h>
@@ -155,8 +156,15 @@ class sector_tools {
     public:
         // Public methods
         sector_tools();
+        static uint32_t get32lsb(const uint8_t* src);
+        static void put32lsb(uint8_t* dest, uint32_t value);
         sector_tools_types detect(uint8_t* sector);
         static sector_tools_stream_types detect_stream(sector_tools_types type);
+        uint32_t edc_compute(
+            uint32_t edc,
+            const uint8_t* src,
+            size_t size
+        );
         static int8_t write_type_count(
             uint8_t* outBuffer,
             sector_tools_types type,
@@ -188,6 +196,14 @@ class sector_tools {
             uint16_t& output_size,
             optimization_options options
         );
+        int8_t regenerate_sector(
+            uint8_t* out,
+            uint8_t* sector,
+            sector_tools_types type,
+            uint32_t total_sectors,
+            uint16_t& bytes_readed,
+            optimization_options options
+        );
 
         // Public attributes
         int8_t last_sector_type = -1; 
@@ -195,13 +211,7 @@ class sector_tools {
     private:
         // Private methods
         bool is_gap(uint8_t *sector, uint32_t length);
-        uint32_t get32lsb(const uint8_t* src);
         void eccedc_init(void);
-        uint32_t edc_compute(
-            uint32_t edc,
-            const uint8_t* src,
-            size_t size
-        );
         int8_t ecc_checkpq(
             const uint8_t* address,
             const uint8_t* data,
