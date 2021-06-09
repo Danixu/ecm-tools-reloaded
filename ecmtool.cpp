@@ -491,7 +491,7 @@ static int8_t ecmify(
                 input_edc = sTools.edc_compute(
                     input_edc,
                     in_queue + in_queue_bytes_available,
-                    willread
+                    readed
                 );
 
                 setcounter_encode(ftello(in));
@@ -574,77 +574,6 @@ static int8_t ecmify(
 }
 
 
-void print_help() {
-    banner();
-    printf(
-        "Usage:\n"
-        "\n"
-        "To encode:\n"
-        "    ecmtool -i/--input cdimagefile\n"
-        "    ecmtool -i/--input cdimagefile -o/--output ecmfile\n"
-        "\n"
-        "To decode:\n"
-        "    ecmtool -i/--input ecmfile\n"
-        "    ecmtool -i/--input ecmfile -o/--output cdimagefile\n"
-        "\n"
-        "Optional:\n"
-        "    -d/--compatible\n"
-        "           Use the old ecm format compatible with the original tool\n"
-        "           Will be ignored when decoding because the version is autodetected\n"
-        "    -c/--compression <gzip/lzma>\n"
-        "           Compress the stream using the provided algorithm (Not implemented yet)\n"
-        "    -f/--force\n"
-        "           Force to ovewrite the output file\n"
-    );
-}
-
-static void resetcounter(off_t total) {
-    mycounter_analyze = (off_t)-1;
-    mycounter_encode  = (off_t)-1;
-    mycounter_decode  = (off_t)-1;
-    mycounter_total   = total;
-}
-
-static void encode_progress(void) {
-    off_t a = (mycounter_analyze + 64) / 128;
-    off_t e = (mycounter_encode  + 64) / 128;
-    off_t t = (mycounter_total   + 64) / 128;
-    if(!t) { t = 1; }
-    fprintf(stderr,
-        "Analyze(%02u%%) Encode(%02u%%)\r",
-        (unsigned)((((off_t)100) * a) / t),
-        (unsigned)((((off_t)100) * e) / t)
-    );
-}
-
-static void decode_progress(void) {
-    off_t d = (mycounter_decode  + 64) / 128;
-    off_t t = (mycounter_total   + 64) / 128;
-    if(!t) { t = 1; }
-    fprintf(stderr,
-        "Decode(%02u%%)\r",
-        (unsigned)((((off_t)100) * d) / t)
-    );
-}
-
-static void setcounter_analyze(off_t n) {
-    int8_t p = ((n >> 20) != (mycounter_analyze >> 20));
-    mycounter_analyze = n;
-    if(p) { encode_progress(); }
-}
-
-static void setcounter_encode(off_t n) {
-    int8_t p = ((n >> 20) != (mycounter_encode >> 20));
-    mycounter_encode = n;
-    if(p) { encode_progress(); }
-}
-
-static void setcounter_decode(off_t n) {
-    int8_t p = ((n >> 20) != (mycounter_decode >> 20));
-    mycounter_decode = n;
-    if(p) { decode_progress(); }
-}
-
 static int8_t unecmify(
     const char* infilename,
     const char* outfilename,
@@ -655,7 +584,8 @@ static int8_t unecmify(
     uint8_t return_code = 0;
 
     // CRC calculator
-    uint32_t input_edc = 0;
+    uint32_t original_edc = 0;
+    uint32_t output_edc = 0;
 
     // Input buffer
     uint8_t* in_queue = NULL;
@@ -705,6 +635,12 @@ static int8_t unecmify(
         return 1;
     }
 
+    out = fopen(outfilename, "wb");
+    if (!in) {
+        printfileerror(out, outfilename);
+        return 1;
+    }
+
     // Getting the input size to set the progress
     fseeko(in, 0, SEEK_END);
     size_t in_total_size = ftello(in);
@@ -715,6 +651,13 @@ static int8_t unecmify(
     // Allocate input buffer space
     in_queue = (uint8_t*) malloc(queue_size);
     if(!in_queue) {
+        printf("Out of memory\n");
+        return 1;
+    }
+
+    // Allocate output buffer space
+    out_queue = (uint8_t*) malloc(queue_size);
+    if(!out_queue) {
         printf("Out of memory\n");
         return 1;
     }
@@ -791,6 +734,13 @@ static int8_t unecmify(
         if((queue_size - out_queue_current_ofs) < 2352) {
             fwrite(out_queue, 1, out_queue_current_ofs, out);
 
+            // Compute the crc of the readed data 
+            output_edc = sTools.edc_compute(
+                output_edc,
+                out_queue,
+                out_queue_current_ofs
+            );
+
             if (ferror(out)) {
                 // Something happen while reading the input file
                 printfileerror(in, infilename);
@@ -828,15 +778,6 @@ static int8_t unecmify(
                     return_code = 1;
                 }
 
-                /*
-                // Compute the crc of the readed data 
-                input_edc = sTools.edc_compute(
-                    input_edc,
-                    in_queue + in_queue_bytes_available,
-                    willread
-                );
-                */
-
                 setcounter_decode(ftello(in));
                 in_queue_bytes_available += readed;
             }
@@ -854,8 +795,8 @@ static int8_t unecmify(
             else if (!get_count) {
                 // There is no more data in header. Next 4 bytes might be the CRC
                 // Reading it...
-                uint32_t crc = sTools.get32lsb(in_queue + in_queue_current_ofs);
-                in_queue_current_ofs+= 4;
+                original_edc = sTools.get32lsb(in_queue + in_queue_current_ofs);
+                in_queue_current_ofs += 4;
                 in_queue_bytes_available -= 4;
 
                 // End Of TOC reached, so file should have be processed completly
@@ -897,6 +838,14 @@ static int8_t unecmify(
     // If there is data in the output buffer, we will flush it first
     if (out_queue_current_ofs) {
         fwrite(out_queue, 1, out_queue_current_ofs, out);
+
+        // Compute the crc of the readed data 
+        output_edc = sTools.edc_compute(
+            output_edc,
+            out_queue,
+            out_queue_current_ofs
+        );
+    
         if (ferror(out)) {
             // Something happen while reading the input file
             printfileerror(in, infilename);
@@ -910,6 +859,89 @@ static int8_t unecmify(
     free(out_queue);
     free(sectors_toc_buffer);
     free(streams_toc_buffer);
-    printf("\n\nFinished!\n");
+    if (original_edc == output_edc) {
+        printf("\n\nFinished!\n");
+    }
+    else {
+        printf("\n\nWrong CRC!... Maybe the input file is damaged.\n");
+    }
     return return_code;
+}
+
+
+void print_help() {
+    banner();
+    printf(
+        "Usage:\n"
+        "\n"
+        "To encode:\n"
+        "    ecmtool -i/--input cdimagefile\n"
+        "    ecmtool -i/--input cdimagefile -o/--output ecmfile\n"
+        "\n"
+        "To decode:\n"
+        "    ecmtool -i/--input ecmfile\n"
+        "    ecmtool -i/--input ecmfile -o/--output cdimagefile\n"
+        "\n"
+        "Optional:\n"
+        "    -d/--compatible\n"
+        "           Use the old ecm format compatible with the original tool\n"
+        "           Will be ignored when decoding because the version is autodetected\n"
+        "    -c/--compression <gzip/lzma>\n"
+        "           Compress the stream using the provided algorithm (Not implemented yet)\n"
+        "    -f/--force\n"
+        "           Force to ovewrite the output file\n"
+    );
+}
+
+
+static void resetcounter(off_t total) {
+    mycounter_analyze = (off_t)-1;
+    mycounter_encode  = (off_t)-1;
+    mycounter_decode  = (off_t)-1;
+    mycounter_total   = total;
+}
+
+
+static void encode_progress(void) {
+    off_t a = (mycounter_analyze + 64) / 128;
+    off_t e = (mycounter_encode  + 64) / 128;
+    off_t t = (mycounter_total   + 64) / 128;
+    if(!t) { t = 1; }
+    fprintf(stderr,
+        "Analyze(%02u%%) Encode(%02u%%)\r",
+        (unsigned)((((off_t)100) * a) / t),
+        (unsigned)((((off_t)100) * e) / t)
+    );
+}
+
+
+static void decode_progress(void) {
+    off_t d = (mycounter_decode  + 64) / 128;
+    off_t t = (mycounter_total   + 64) / 128;
+    if(!t) { t = 1; }
+    fprintf(stderr,
+        "Decode(%02u%%)\r",
+        (unsigned)((((off_t)100) * d) / t)
+    );
+}
+
+
+static void setcounter_analyze(off_t n) {
+    int8_t p = ((n >> 20) != (mycounter_analyze >> 20));
+    mycounter_analyze = n;
+    if(p) { encode_progress(); }
+}
+
+
+static void setcounter_encode(off_t n) {
+    int8_t p = ((n >> 20) != (mycounter_encode >> 20));
+    mycounter_encode = n;
+    if(p) { encode_progress(); }
+}
+
+
+static void setcounter_decode(off_t n) {
+    int8_t p = ((n >> 20) != (mycounter_decode >> 20));
+    mycounter_decode = n;
+    if(p) { decode_progress(); }
 }

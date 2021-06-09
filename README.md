@@ -24,6 +24,11 @@ By Daniel Carrasco (https://www.electrosoftcloud.com)
 
 # Changelog
 
+### 20210609
+
+* Added the decoding functions. Now the program is able to encode and decode files
+* Fixed CRC calculation on encoding
+
 ### 20210608
 
 * Added CRC to verify the file integrity after decoding

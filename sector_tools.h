@@ -200,7 +200,7 @@ class sector_tools {
             uint8_t* out,
             uint8_t* sector,
             sector_tools_types type,
-            uint32_t total_sectors,
+            uint32_t sector_number,
             uint16_t& bytes_readed,
             optimization_options options
         );
@@ -225,6 +225,24 @@ class sector_tools {
             const uint8_t *address,
             const uint8_t *data,
             const uint8_t *ecc
+        );
+        void ecc_writepq(
+            const uint8_t* address,
+            const uint8_t* data,
+            size_t major_count,
+            size_t minor_count,
+            size_t major_mult,
+            size_t minor_inc,
+            uint8_t* ecc
+        );
+        void ecc_writesector(
+            const uint8_t *address,
+            const uint8_t *data,
+            uint8_t *ecc
+        );
+        void sector_to_time(
+            uint8_t* out,
+            uint32_t sector_number
         );
 
         // Private attributes
