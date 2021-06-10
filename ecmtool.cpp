@@ -32,12 +32,14 @@ void print_help();
 static int8_t ecmify(
     const char* infilename,
     const char* outfilename,
-    const bool force_rewrite
+    const bool force_rewrite,
+    const bool analysis
 );
 static int8_t unecmify(
     const char* infilename,
     const char* outfilename,
-    const bool force_rewrite
+    const bool force_rewrite,
+    const bool analysis
 );
 static void resetcounter(off_t total);
 static void encode_progress(void);
@@ -64,6 +66,7 @@ static struct option long_options[] = {
     {"compatible", no_argument, NULL, 'd'},
     {"compression", required_argument, NULL, 'c'},
     {"force", required_argument, NULL, 'f'},
+    {"analysis", no_argument, NULL, 'a'},
     {NULL, 0, NULL, 0}
 };
 
@@ -75,12 +78,13 @@ int main(int argc, char** argv) {
     int compression = 0;
     bool compatible = false;
     bool force_rewrite = false;
+    bool analysis = false;
 
     // Decode
     bool decode = false;
 
     char ch;
-    while ((ch = getopt_long(argc, argv, "i:o:dc:f", long_options, NULL)) != -1)
+    while ((ch = getopt_long(argc, argv, "i:o:dc:fa", long_options, NULL)) != -1)
     {
         // check to see if a single character or long option came through
         switch (ch)
@@ -104,6 +108,10 @@ int main(int argc, char** argv) {
             // short option '-c', long option "--compression"
             case 'f':
                 force_rewrite = true;
+                break;
+            // short option '-a', long option "--analysis"
+            case 'a':
+                analysis = true;
                 break;
             case '?':
                 print_help();
@@ -186,10 +194,10 @@ int main(int argc, char** argv) {
     }
 
     if (decode) {
-        unecmify(infilename, outfilename, force_rewrite);
+        unecmify(infilename, outfilename, force_rewrite, analysis);
     }
     else {
-        ecmify(infilename, outfilename, force_rewrite);
+        ecmify(infilename, outfilename, force_rewrite, analysis);
     }
 }
 
@@ -197,10 +205,12 @@ int main(int argc, char** argv) {
 static int8_t ecmify(
     const char* infilename,
     const char* outfilename,
-    const bool force_rewrite
+    const bool force_rewrite,
+    const bool analysis
 ) {
     FILE* in  = NULL;
     FILE* out = NULL;
+    FILE* analizer = NULL;
     uint8_t return_code = 0;
 
     // CRC calculator
@@ -271,6 +281,16 @@ static int8_t ecmify(
     if (!out) {
         printfileerror(out, infilename);
         return 1;
+    }
+
+    if (analysis) {
+        analizer = fopen("analysis.txt", "w");
+        if (!out) {
+            printfileerror(analizer, "analysis.txt");
+            return 1;
+        }
+
+        fwrite("s_type;b_copied;out_offset;\n", 28, 1, analizer);
     }
 
     // Allocate input buffer space
@@ -419,6 +439,15 @@ static int8_t ecmify(
         return 1;
     }
 
+    if (analysis) {
+        fwrite("header;4;4;\n", 12, 1, analizer);
+        char analysis_text[30];
+        sprintf(analysis_text, "stream_toc;%d;%d\n", streams_toc_buffer_current_ofs, streams_toc_buffer_current_ofs + 4);
+        fwrite(analysis_text, strlen(analysis_text), 1, analizer);
+        sprintf(analysis_text, "sectors_toc;%d;%d\n", sectors_toc_buffer_current_ofs, streams_toc_buffer_current_ofs + sectors_toc_buffer_current_ofs + 4);
+        fwrite(analysis_text, strlen(analysis_text), 1, analizer);
+    }
+
     //printf("Writting header and TOC data to output buffer\n");
     // Add the Header to the output buffer
     out_queue[0] = 'E';
@@ -546,6 +575,11 @@ static int8_t ecmify(
             OO_REMOVE_GAP
         );
         //memcpy(out_queue + out_queue_current_ofs, in_queue + in_queue_current_ofs, 2352);
+        if (analysis) {
+            char analysis_text[30];
+            sprintf(analysis_text, "%d;%d;%d;\n", curtype, output_size, ftello(out) + out_queue_current_ofs);
+            fwrite(analysis_text, strlen(analysis_text), 1, analizer);
+        }
 
         in_queue_current_ofs += 2352;
         in_queue_bytes_available -= 2352;
@@ -563,6 +597,9 @@ static int8_t ecmify(
         }
     }
 
+    if (analizer) {
+        fclose(analizer);
+    }
     fclose(in);
     fclose(out);
     free(in_queue);
@@ -577,7 +614,8 @@ static int8_t ecmify(
 static int8_t unecmify(
     const char* infilename,
     const char* outfilename,
-    const bool force_rewrite
+    const bool force_rewrite,
+    const bool analysis
 ) {
     FILE* in  = NULL;
     FILE* out = NULL;

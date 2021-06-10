@@ -75,14 +75,6 @@ sector_tools_types sector_tools::detect(uint8_t* sector) {
             sector[0x00F] == 0x02 // mode (1 byte)
         ) {
             //  The sector is MODE2, and now we will detect what kind
-            // Checking if sector is MODE 2 without XA
-            if(is_gap(sector + 0x010, 0x920)) {
-                return STT_MODE2_GAP;
-            }
-            else {
-                return STT_MODE2;
-            }   
-
             //
             // Might be Mode 2, Form 1 or 2
             //
@@ -114,6 +106,14 @@ sector_tools_types sector_tools::detect(uint8_t* sector) {
                 else {
                     return STT_MODE2_2; // Mode 2, Form 2
                 }
+            }
+
+            // Checking if sector is MODE 2 without XA
+            if(is_gap(sector + 0x010, 0x920)) {
+                return STT_MODE2_GAP;
+            }
+            else {
+                return STT_MODE2;
             }         
         }
     }
