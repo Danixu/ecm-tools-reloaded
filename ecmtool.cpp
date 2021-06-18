@@ -364,9 +364,6 @@ static int8_t ecmify(
             detected_type = sTools.detect(in_queue + in_queue_current_ofs);
         }
 
-        in_queue_current_ofs += 2352;
-        in_queue_bytes_available -= 2352;
-
         if(
             (detected_type == curtype) &&
             (curtype_count <= 0x7FFFFFFF) // avoid overflow
@@ -375,36 +372,40 @@ static int8_t ecmify(
             curtype_count++;
         }
         else {
+            uint8_t generated_bytes;
+            // Checking if the stream type is different than the last one
+            sector_tools_stream_types stream_type = sTools.detect_stream(curtype);
+            if (stream_type != curstreamtype) {
+                uint8_t generated_bytes;
+                uint32_t current_in = ftello(in) - in_queue_bytes_available;
+                printf("\nStreamPos = %d - In = %d - Buffer = %d\n\n", current_in, ftello(in), in_queue_bytes_available);
+                sTools.write_type_count(
+                    streams_toc_buffer + streams_toc_buffer_current_ofs,
+                    stream_type,
+                    current_in,
+                    generated_bytes
+                );
+                streams_toc_buffer_current_ofs += generated_bytes;
+                curstreamtype = stream_type;
+            }
+
             if(curtype_count > 0) {
                 // Generate the sector mode data
-                uint8_t generated_bytes;
                 sTools.write_type_count(
                     sectors_toc_buffer + sectors_toc_buffer_current_ofs,
                     curtype,
                     curtype_count,
                     generated_bytes
                 );
-                sectors_toc_buffer_current_ofs += generated_bytes;
-
-                // Checking if the stream type is different than the last one
-                sector_tools_stream_types stream_type = sTools.detect_stream(curtype);
-                if (stream_type != curstreamtype) {
-                    uint8_t generated_bytes;
-                    uint32_t current_in = ftello(in) - in_queue_bytes_available;
-                    sTools.write_type_count(
-                        streams_toc_buffer + streams_toc_buffer_current_ofs,
-                        stream_type,
-                        current_in,
-                        generated_bytes
-                    );
-                    streams_toc_buffer_current_ofs += generated_bytes;
-                    curstreamtype = stream_type;
-                }
+                sectors_toc_buffer_current_ofs += generated_bytes; 
             }
 
             curtype = detected_type;
             curtype_count = 1;
         }
+
+        in_queue_current_ofs += 2352;
+        in_queue_bytes_available -= 2352;
 
         // if curtype is negative at this point, then the EOF is reached
         if(curtype == STT_UNKNOWN) {
