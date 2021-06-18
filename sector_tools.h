@@ -123,6 +123,20 @@ enum sector_tools_types : uint8_t {
 //
 // Stream types detectable by the class
 //
+enum sector_tools_compression : uint8_t {
+    STC_NONE = 0,
+    STC_AUDIO_FLAC,
+    STC_AUDIO_APE,
+    STC_AUDIO_WAVPACK,
+    STC_DATA_ZLIB = 1,
+    STC_DATA_LZMA,
+    STC_DATA_BZ2,
+    STC_DATA_LZ4
+};
+
+//
+// Stream Compressions
+//
 enum sector_tools_stream_types : uint8_t {
     STST_UNKNOWN = 0,
     STST_AUDIO,
@@ -171,8 +185,9 @@ class sector_tools {
             uint32_t count,
             uint8_t& generated_bytes
         );
-        static int8_t write_type_count(
+        static int8_t write_stream_type_count(
             uint8_t* outBuffer,
+            sector_tools_compression compression,
             sector_tools_stream_types type,
             uint32_t count,
             uint8_t& generated_bytes
@@ -183,8 +198,9 @@ class sector_tools {
             uint32_t& count,
             uint8_t& readed_bytes
         );
-        static int8_t read_type_count(
+        static int8_t read_stream_type_count(
             uint8_t* inBuffer,
+            sector_tools_compression compression,
             sector_tools_stream_types& type,
             uint32_t& count,
             uint8_t& readed_bytes

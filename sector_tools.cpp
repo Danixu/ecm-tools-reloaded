@@ -357,21 +357,23 @@ int8_t sector_tools::write_type_count(
     return 0;
 }
 
-// Overload for stream type
-int8_t sector_tools::write_type_count(
+// write for stream type and count
+int8_t sector_tools::write_stream_type_count(
     uint8_t* outBuffer,
+    sector_tools_compression compression,
     sector_tools_stream_types type,
     uint32_t count,
     uint8_t& generated_bytes
 ) {
     generated_bytes = 0; // We will set the generated_bytes counter to 0
 
-    // Generating the first byte wich contains the type and a number up to 15
-    // First bit is used as a "more exists" mark
-    outBuffer[generated_bytes] = ((count >= 32) << 7) | ((count & 31) << 2) | type;
+    // Generating the first byte wich contains the type, the compression and a number up to 8
+    // First bit is used as a "continue" mark
+    outBuffer[generated_bytes] = ((count >= 8) << 7) | ((count & 7) << 4) | ((uint8_t)compression << 1) | ((uint8_t)type - 1);
+
     generated_bytes++; // Now we are in position 1
 
-    count >>= 5; // We will shift the counter 5 positions to right (same as divide by 32)
+    count >>= 3; // We will shift the counter 5 positions to right (same as divide by 32)
 
     // While the counter is not 0
     while(count) {
@@ -430,8 +432,9 @@ int8_t sector_tools::read_type_count(
 }
 
 // Overload for stream type
-int8_t sector_tools::read_type_count(
+int8_t sector_tools::read_stream_type_count(
     uint8_t* inBuffer,
+    sector_tools_compression compression,
     sector_tools_stream_types& type,
     uint32_t& count,
     uint8_t& readed_bytes
@@ -439,10 +442,11 @@ int8_t sector_tools::read_type_count(
     readed_bytes = 0;
     int c = inBuffer[readed_bytes];
     readed_bytes++;
-    int bits = 5;
+    int bits = 3;
 
-    type = (sector_tools_stream_types)(c & 0x3);
-    count = (c >> 2) & 0x1F;
+    compression = (sector_tools_compression)(c >> 1 & 0x7);
+    type = (sector_tools_stream_types)((c & 0x1) + 1);
+    count = (c >> 4) & 0x7;
 
     while(c & 0x80) {
         c = inBuffer[readed_bytes];

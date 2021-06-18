@@ -21,7 +21,7 @@ The header is just to identify the file. Uses the same first three bytes as the 
 
 ### Streams TOC
 
-The stream TOC contains all the information about the streams that were detected in the original file (audio and data), their size in the ECM file, the number of sectors and the compression used in this stream. This will be used to compress the data and the audio separately. The sectors number is used to verify that all are readed and return error if not.
+The streams TOC contains all the information about the streams that were detected in the original file (audio and data), their end position in the original file and the compression used in this stream. This will be used to compress the data and the audio separately. The end positions is to verify that all bytes are readed.
 
 Every stream in the TOC will contains the following data.
 
@@ -31,6 +31,32 @@ Every stream in the TOC will contains the following data.
 | Size        | 0x01 - ?? | The size of the stream in the ecm file to detect when the program must stop reading    |
 
 A 0x00 byte will be added at the end of the Streams TOC (At the end of all, not in every). The first bit of the Count bytes will be used to store the "continuation" byte, wich will tell the program to continue reading the next byte. This will limit the number stored in those bytes up to 128 instead the size of an uint8_t variable (256).
+
+#### First byte
+
+```
+Bits |  0    1    2    3    4    5    6    7
+      |   ||             ||             ||   |
+       ---  -------------  -------------  ---
+        |      Counter         Comp       Type
+        |
+        └--  Continuation bit
+```
+
+The first stream byte is composed by the first bit that is a continuation bit and will indicate if the program must use the next byte to the count calculation. Next three bytes are just the first count divider, the next three bytes are used to store the stream compression and the last bit will contain the stream type.
+
+#### Next Nth bytes
+
+```
+Bits |  0    1    2    3    4    5    6    7
+      |   ||                                |
+       ---  --------------------------------
+        |               Counter
+        |
+        └--  Continuation bit
+```
+
+As was explained in the above section, this byte will have he first bit as "continuation bit", and will indicate if the program must read the next byte to be used in the count calculation. The next 7 bits will be used to store the count divider.
 
 ### Sectors TOC
 
@@ -42,6 +68,32 @@ The sectors TOC is a list of kind of sectors detected in the original file, whic
 | Count                 | 0x01 - ?? | The rest of the count bytes. If the sectors count is bigger than 8, will be stored in the following bytes  |
 
 The first bit of the Count bytes will be used to store the "continuation" byte, wich will tell the program to continue reading the next byte. This will limit the number stored in those bytes up to 128 instead the size of an uint8_t variable (256). This stream also ends by 0x00 to mark the EOD.
+
+#### First byte
+
+```
+Bits |  0    1    2    3    4    5    6    7
+      |   ||             ||                 |
+       ---  -------------  -----------------
+        |      Counter        Sector type
+        |
+        └--  Continuation bit
+```
+
+First bit is 1 when the program must continue reading the next byte to be used in sectors count calculation. The last count byte will have this bit to 0. Next 3 bites are used to store the first part of the count, and last four bits are used to store the sector type.
+
+#### Next Nth bytes
+
+```
+Bits |  0    1    2    3    4    5    6    7
+      |   ||                                |
+       ---  --------------------------------
+        |               Counter
+        |
+        └--  Continuation bit
+```
+
+As was explained in the above section, this byte will have he first bit as "continuation bit", and will indicate if the program must read the next byte to be used in the count calculation. The next 7 bits will be used to store the count.
 
 ### Data
 

@@ -32,14 +32,12 @@ void print_help();
 static int8_t ecmify(
     const char* infilename,
     const char* outfilename,
-    const bool force_rewrite,
-    const bool analysis
+    const bool force_rewrite
 );
 static int8_t unecmify(
     const char* infilename,
     const char* outfilename,
-    const bool force_rewrite,
-    const bool analysis
+    const bool force_rewrite
 );
 static void resetcounter(off_t total);
 static void encode_progress(void);
@@ -66,7 +64,6 @@ static struct option long_options[] = {
     {"compatible", no_argument, NULL, 'd'},
     {"compression", required_argument, NULL, 'c'},
     {"force", required_argument, NULL, 'f'},
-    {"analysis", no_argument, NULL, 'a'},
     {NULL, 0, NULL, 0}
 };
 
@@ -78,13 +75,12 @@ int main(int argc, char** argv) {
     int compression = 0;
     bool compatible = false;
     bool force_rewrite = false;
-    bool analysis = false;
 
     // Decode
     bool decode = false;
 
     char ch;
-    while ((ch = getopt_long(argc, argv, "i:o:dc:fa", long_options, NULL)) != -1)
+    while ((ch = getopt_long(argc, argv, "i:o:dc:f", long_options, NULL)) != -1)
     {
         // check to see if a single character or long option came through
         switch (ch)
@@ -108,10 +104,6 @@ int main(int argc, char** argv) {
             // short option '-c', long option "--compression"
             case 'f':
                 force_rewrite = true;
-                break;
-            // short option '-a', long option "--analysis"
-            case 'a':
-                analysis = true;
                 break;
             case '?':
                 print_help();
@@ -194,10 +186,10 @@ int main(int argc, char** argv) {
     }
 
     if (decode) {
-        unecmify(infilename, outfilename, force_rewrite, analysis);
+        unecmify(infilename, outfilename, force_rewrite);
     }
     else {
-        ecmify(infilename, outfilename, force_rewrite, analysis);
+        ecmify(infilename, outfilename, force_rewrite);
     }
 }
 
@@ -205,8 +197,7 @@ int main(int argc, char** argv) {
 static int8_t ecmify(
     const char* infilename,
     const char* outfilename,
-    const bool force_rewrite,
-    const bool analysis
+    const bool force_rewrite
 ) {
     FILE* in  = NULL;
     FILE* out = NULL;
@@ -281,16 +272,6 @@ static int8_t ecmify(
     if (!out) {
         printfileerror(out, infilename);
         return 1;
-    }
-
-    if (analysis) {
-        analizer = fopen("analysis.txt", "w");
-        if (!out) {
-            printfileerror(analizer, "analysis.txt");
-            return 1;
-        }
-
-        fwrite("s_type;b_copied;out_offset;\n", 28, 1, analizer);
     }
 
     // Allocate input buffer space
@@ -384,9 +365,9 @@ static int8_t ecmify(
                 // nTH stream, saving the position as "END" of the last stream
                 uint8_t generated_bytes;
                 uint32_t current_in = ftello(in) - in_queue_bytes_available;
-                printf("\nStreamEnd = %d - In = %d - Buffer = %d\n\n", current_in, ftello(in), in_queue_bytes_available);
-                sTools.write_type_count(
+                sTools.write_stream_type_count(
                     streams_toc_buffer + streams_toc_buffer_current_ofs,
+                    STC_NONE,
                     curstreamtype,
                     current_in,
                     generated_bytes
@@ -425,25 +406,27 @@ static int8_t ecmify(
             );
             sectors_toc_buffer_current_ofs++;
 
-            // Write the End of Data to Streams TOC buffer
-            sTools.write_type_count(
-                streams_toc_buffer + streams_toc_buffer_current_ofs,
-                STST_UNKNOWN,
-                0,
-                generated_bytes
-            );
-            streams_toc_buffer_current_ofs += generated_bytes;
+            
             break;
         }
     }
 
     // Once all is processed, we will store the last stream End Of Stream
-    uint8_t generated_bytes;
-    printf("\nLast StreamEnd = %d\n\n", ftello(in));
-    sTools.write_type_count(
+    uint8_t generated_bytes = 0;
+    sTools.write_stream_type_count(
         streams_toc_buffer + streams_toc_buffer_current_ofs,
+        STC_NONE, // None for now
         curstreamtype,
         ftello(in),
+        generated_bytes
+    );
+    streams_toc_buffer_current_ofs += generated_bytes;
+    // Write the End of Data to Streams TOC buffer
+    sTools.write_stream_type_count(
+        streams_toc_buffer + streams_toc_buffer_current_ofs,
+        STC_NONE,
+        STST_AUDIO, // The function will extract 1 from this, so to store 0 must be 1 (STST_AUDIO)
+        0,
         generated_bytes
     );
     streams_toc_buffer_current_ofs += generated_bytes;
@@ -457,21 +440,13 @@ static int8_t ecmify(
         return 1;
     }
 
-    if (analysis) {
-        fwrite("header;4;4;\n", 12, 1, analizer);
-        char analysis_text[30];
-        sprintf(analysis_text, "stream_toc;%d;%d\n", streams_toc_buffer_current_ofs, streams_toc_buffer_current_ofs + 4);
-        fwrite(analysis_text, strlen(analysis_text), 1, analizer);
-        sprintf(analysis_text, "sectors_toc;%d;%d\n", sectors_toc_buffer_current_ofs, streams_toc_buffer_current_ofs + sectors_toc_buffer_current_ofs + 4);
-        fwrite(analysis_text, strlen(analysis_text), 1, analizer);
-    }
-
     //printf("Writting header and TOC data to output buffer\n");
     // Add the Header to the output buffer
     out_queue[0] = 'E';
     out_queue[1] = 'C';
     out_queue[2] = 'M';
     out_queue[3] = 0x01; // ECM version. For now 0 is the original version and 1 the new version
+
     // Copy the Streams TOC buffer to the output buffer
     memcpy(out_queue + 4, streams_toc_buffer, streams_toc_buffer_current_ofs);
     // set the current output buffer position
@@ -593,11 +568,6 @@ static int8_t ecmify(
             OO_REMOVE_GAP
         );
         //memcpy(out_queue + out_queue_current_ofs, in_queue + in_queue_current_ofs, 2352);
-        if (analysis) {
-            char analysis_text[30];
-            sprintf(analysis_text, "%d;%d;%d;\n", curtype, output_size, ftello(out) + out_queue_current_ofs);
-            fwrite(analysis_text, strlen(analysis_text), 1, analizer);
-        }
 
         in_queue_current_ofs += 2352;
         in_queue_bytes_available -= 2352;
@@ -632,8 +602,7 @@ static int8_t ecmify(
 static int8_t unecmify(
     const char* infilename,
     const char* outfilename,
-    const bool force_rewrite,
-    const bool analysis
+    const bool force_rewrite
 ) {
     FILE* in  = NULL;
     FILE* out = NULL;
@@ -660,6 +629,7 @@ static int8_t unecmify(
     uint8_t* streams_toc_buffer = NULL;
     size_t streams_toc_buffer_current_ofs = 0;
     sector_tools_stream_types curstreamtype = STST_UNKNOWN; // not a valid type
+    size_t streams_eos_position = 0;
 
     //
     // Current sector type (run)
@@ -808,13 +778,38 @@ static int8_t unecmify(
             out_queue_current_ofs = 0;
         }
 
+        // Before fillint the queue, we will calculate the end of stream
+        size_t current_output_size = ftello(out) + out_queue_current_ofs;
+        uint32_t current_stream_end_position = 0;
+        uint8_t readed_bytes = 0;
+        sector_tools_compression compression = STC_NONE;
+        if (current_output_size == streams_eos_position) {
+            // Get the new stream data
+            int8_t status = sTools.read_stream_type_count(
+                streams_toc_buffer + streams_toc_buffer_current_ofs,
+                compression,
+                curstreamtype,
+                current_stream_end_position,
+                readed_bytes
+            );
+            streams_toc_buffer_current_ofs += readed_bytes;
+
+            // We will set the new stream end position
+            streams_eos_position = current_stream_end_position;
+        }
+
         // Refill IN queue if necessary
         if(
             !feof(in) &&
             (in_queue_bytes_available < 2352)
         ) {
-            // We need to read more data
-            size_t willread = queue_size - in_queue_bytes_available;
+            // We will read the full stream...
+            size_t willread = streams_eos_position - ftello(out) - out_queue_current_ofs;
+
+            // but only if the buffer is bigger.
+            if (willread > (queue_size - in_queue_bytes_available)) {
+                willread = queue_size - in_queue_bytes_available;
+            }
             
             // If the queue offset 
             if(in_queue_bytes_available > 0 && in_queue_current_ofs > 0) {

@@ -27,6 +27,15 @@ By Daniel Carrasco (https://www.electrosoftcloud.com)
 
 # Changelog
 
+### 20210618
+
+* Fixed the streams data. The correct data is now stored (counter, compression and type).
+* Streams size is used in decoding (first step to add compression)
+
+### 20210617
+
+* Fixed streams data position. Now it stores the end position in the original file to be used as control.
+
 ### 20210610
 
 * Fixed a bug detecting the MODE2 XA sectors which causes bigger files. At least this bug has helped me to test the Mode 2 conversion.
