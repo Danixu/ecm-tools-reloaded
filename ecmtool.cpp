@@ -375,13 +375,19 @@ static int8_t ecmify(
             uint8_t generated_bytes;
             // Checking if the stream type is different than the last one
             sector_tools_stream_types stream_type = sTools.detect_stream(curtype);
-            if (stream_type != curstreamtype) {
+
+            if (curstreamtype == STST_UNKNOWN) {
+                // First stream position. We need the end of stream, so we will just save the type
+                curstreamtype = stream_type;
+            }
+            else if (stream_type != curstreamtype) {
+                // nTH stream, saving the position as "END" of the last stream
                 uint8_t generated_bytes;
                 uint32_t current_in = ftello(in) - in_queue_bytes_available;
-                printf("\nStreamPos = %d - In = %d - Buffer = %d\n\n", current_in, ftello(in), in_queue_bytes_available);
+                printf("\nStreamEnd = %d - In = %d - Buffer = %d\n\n", current_in, ftello(in), in_queue_bytes_available);
                 sTools.write_type_count(
                     streams_toc_buffer + streams_toc_buffer_current_ofs,
-                    stream_type,
+                    curstreamtype,
                     current_in,
                     generated_bytes
                 );
@@ -430,6 +436,17 @@ static int8_t ecmify(
             break;
         }
     }
+
+    // Once all is processed, we will store the last stream End Of Stream
+    uint8_t generated_bytes;
+    printf("\nLast StreamEnd = %d\n\n", ftello(in));
+    sTools.write_type_count(
+        streams_toc_buffer + streams_toc_buffer_current_ofs,
+        curstreamtype,
+        ftello(in),
+        generated_bytes
+    );
+    streams_toc_buffer_current_ofs += generated_bytes;
 
     // Once the file is analyzed and we know the TOC, we will process al the data
     //
