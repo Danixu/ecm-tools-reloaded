@@ -307,10 +307,7 @@ static int8_t ecmify(
     while (!return_code) {
         sector_tools_types detected_type;
 
-        // Update the input file position
-        setcounter_analyze(ftello(in));
-
-        if (feof(in)) {
+        if (feof(in) || ftello(in) == in_total_size) {
             // If there are no bytes in queue and EOF was reached, break the loop
             detected_type = STT_UNKNOWN;
         }
@@ -318,6 +315,9 @@ static int8_t ecmify(
             fread(in_sector, 2352, 1, in);
             detected_type = sTools.detect(in_sector);
         }
+
+        // Update the input file position
+        setcounter_analyze(ftello(in));
 
         if(
             (detected_type == curtype) &&
@@ -365,7 +365,7 @@ static int8_t ecmify(
             curtype_count = 1;
         }
 
-        // if curtype is negative at this point, then the EOF is reached
+        // if curtype is unknown, then the EOF is reached
         if(curtype == STT_UNKNOWN) {
             // Write the End of Data to Sectors TOC buffer
             uint8_t generated_bytes;
@@ -399,12 +399,10 @@ static int8_t ecmify(
         0,
         generated_bytes
     );
-    streams_toc_buffer_current_ofs += generated_bytes;
+    streams_toc_buffer_current_ofs++;
 
     // Once the file is analyzed and we know the TOC, we will process al the data
     //
-    
-
     //printf("Writting header and TOC data to output buffer\n");
     // Add the Header to the output file
     uint8_t header[4];
@@ -429,10 +427,6 @@ static int8_t ecmify(
     // Starting the processing part
     //
     while (!return_code) {
-        setcounter_encode(ftello(in));
-
-                
-
         // Getting a new sector type from TOC if required
         if (curtype_count == curtype_total) {
             uint8_t readed_bytes = 0;
@@ -444,7 +438,7 @@ static int8_t ecmify(
             }
             else if (!get_count) {
                 // End Of TOC reached, so file should have be processed completly
-                if (!feof(in)) {
+                if (!feof(in) && ftello(in) != in_total_size) {
                     printf("\n\nThere was an error processing the input file...\n");
                     return_code = 1;
                 }
@@ -490,9 +484,11 @@ static int8_t ecmify(
 
         curtype_count++;
         fwrite(out_sector, output_size, 1, out);
+        setcounter_encode(ftello(in));
     }
 
     fclose(in);
+    fflush(out);
     fclose(out);
     free(in_buffer);
     free(out_buffer);
@@ -755,7 +751,7 @@ static int8_t unecmify(
                 in_queue_bytes_available -= 4;
 
                 // End Of TOC reached, so file should have be processed completly
-                if (!feof(in) || in_queue_bytes_available) {
+                if (!feof(in) && ftello(in) != in_total_size) {
                     printf("\n\nThere was an error processing the input file...\n");
                     return_code = 1;
                 }
