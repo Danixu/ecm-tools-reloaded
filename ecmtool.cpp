@@ -594,9 +594,6 @@ static int8_t unecmify(
     // We will start at sector 00:02:00 which is 0x96 -> 150 / 75 sectors per second
     uint32_t           total_sectors = 0x96;
 
-    // Keep a track of the last input position
-    size_t last_in_position = 0;
-
     // Reading the streams header into the buffer
     fseeko(in, 0x04, SEEK_SET);
     uint8_t c[1];
@@ -637,9 +634,6 @@ static int8_t unecmify(
     // Sector buffer
     uint8_t in_sector[2352];
     uint8_t out_sector[2352];
-
-    // Set the current positions after the headers as last position
-    last_in_position = ftello(in);
 
     //
     // Starting the decoding part to generate the output file
@@ -698,7 +692,20 @@ static int8_t unecmify(
 
         // We will regenerate the sector
         uint16_t bytes_readed = 0;
-        fread(in_sector, 2352, 1, in);
+        // Getting the sector size prior to read, to read the real sector size and avoid to fseek every time
+        sTools.encoded_sector_size(curtype, bytes_readed,
+            OO_REMOVE_SYNC |
+            OO_REMOVE_ADDR |
+            OO_REMOVE_MODE |
+            OO_REMOVE_BLANKS |
+            OO_REMOVE_REDUNDANT_FLAG |
+            OO_REMOVE_ECC |
+            OO_REMOVE_EDC |
+            OO_REMOVE_GAP
+        );
+        // Reading the sector from input
+        fread(in_sector, bytes_readed, 1, in);
+        // Regenerating the sector data
         sTools.regenerate_sector(out_sector, in_sector, curtype, total_sectors, bytes_readed,
             OO_REMOVE_SYNC |
             OO_REMOVE_ADDR |
@@ -709,6 +716,7 @@ static int8_t unecmify(
             OO_REMOVE_EDC |
             OO_REMOVE_GAP
         );
+        // Writting the sector to output file
         fwrite(out_sector, 2352, 1, out);
         // Compute the crc of the written data 
         output_edc = sTools.edc_compute(
@@ -717,8 +725,6 @@ static int8_t unecmify(
             2352
         );
 
-        last_in_position += bytes_readed;
-        fseeko(in, last_in_position, SEEK_SET);
         setcounter_decode(ftello(in));
         curtype_count++;
         total_sectors++;

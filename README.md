@@ -29,7 +29,7 @@ By Daniel Carrasco (https://www.electrosoftcloud.com)
 
 ### 20210627
 
-* Changed the manual IN/OUT buffers to C File buffers. The program is a bit slower (6s to 7s encoding, 6s to 12s decoding), but are much easier to manage.
+* Changed the manual IN/OUT buffers to C File buffers. The program is a bit slower (6s to 7s), but are much easier to manage.
 * I have decided to keep the C style File because was faster in several tests.
 
 ### 20210618

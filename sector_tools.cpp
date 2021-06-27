@@ -896,3 +896,147 @@ int8_t sector_tools::regenerate_sector(
 
     return 0;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////
+//
+// Get the encoded sector size without read anything
+//
+// Returns nonzero on error
+//
+int8_t sector_tools::encoded_sector_size(
+    sector_tools_types type,
+    uint16_t& output_size,
+    optimization_options options
+) {
+    output_size = 0;
+    switch(type) {
+        case STT_CDDA:
+        case STT_CDDA_GAP:
+            // CDDA are directly copied
+            if (type == STT_CDDA || !(options & OO_REMOVE_GAP)) {
+                output_size = 2352;
+            }
+            break;
+
+        case STT_MODE1:
+        case STT_MODE1_GAP:
+            // SYNC bytes
+            if (!(options & OO_REMOVE_SYNC)) {
+                output_size += 0x0C;
+            }
+            // Address bytes
+            if (!(options & OO_REMOVE_ADDR)) {
+                output_size += 0x03;
+            }
+            // Mode bytes
+            if (!(options & OO_REMOVE_MODE)) {
+                output_size += 0x01;
+            }
+            // Data bytes
+            if (type == STT_MODE1 || !(options & OO_REMOVE_GAP)) {
+                output_size += 0x800;
+            }
+            // EDC bytes
+            if (!(options & OO_REMOVE_EDC)) {
+                output_size += 0x04;
+            }
+            // Zeroed bytes
+            if (!(options & OO_REMOVE_BLANKS)) {
+                output_size += 0x08;
+            }
+            // ECC bytes
+            if (!(options & OO_REMOVE_ECC)) {
+                output_size += 0x114;
+            }
+            break;
+
+        case STT_MODE2:
+        case STT_MODE2_GAP:
+            // SYNC bytes
+            if (!(options & OO_REMOVE_SYNC)) {
+                output_size += 0x0C;
+            }
+            // Address bytes
+            if (!(options & OO_REMOVE_ADDR)) {
+                output_size += 0x03;
+            }
+            // Mode bytes
+            if (!(options & OO_REMOVE_MODE)) {
+                output_size += 0x01;
+            }
+            // Data bytes
+            if (type == STT_MODE2 || !(options & OO_REMOVE_GAP)) {
+                output_size += 0x920;
+            }
+            break;
+
+        case STT_MODE2_1:
+        case STT_MODE2_1_GAP:
+            // SYNC bytes
+            if (!(options & OO_REMOVE_SYNC)) {
+                output_size += 0x0C;
+            }
+            // Address bytes
+            if (!(options & OO_REMOVE_ADDR)) {
+                output_size += 0x03;
+            }
+            // Mode bytes
+            if (!(options & OO_REMOVE_MODE)) {
+                output_size += 0x01;
+            }
+            // Flags bytes
+            if (!(options & OO_REMOVE_REDUNDANT_FLAG)) {
+                output_size += 0x08;
+            }
+            else {
+                output_size += 0x04;
+            }
+            // Data bytes
+            if (type == STT_MODE2_1 || !(options & OO_REMOVE_GAP)) {
+                output_size += 0x800;
+            }
+            // EDC bytes
+            if (!(options & OO_REMOVE_EDC)) {
+                output_size += 0x04;
+            }
+            // ECC bytes
+            if (!(options & OO_REMOVE_ECC)) {
+                output_size += 0x114;
+            }
+            break;
+
+        case STT_MODE2_2:
+        case STT_MODE2_2_GAP:
+            // SYNC bytes
+            if (!(options & OO_REMOVE_SYNC)) {
+                output_size += 0x0C;
+            }
+            // Address bytes
+            if (!(options & OO_REMOVE_ADDR)) {
+                output_size += 0x03;
+            }
+            // Mode bytes
+            if (!(options & OO_REMOVE_MODE)) {
+                output_size += 0x01;
+            }
+            // Flags bytes
+            if (!(options & OO_REMOVE_REDUNDANT_FLAG)) {
+                output_size += 0x08;
+            }
+            else {
+                output_size += 0x04;
+            }
+            // Data bytes
+            if (type == STT_MODE2_2 || !(options & OO_REMOVE_GAP)) {
+                output_size += 0x914;
+            }
+            // EDC bytes
+            if (!(options & OO_REMOVE_EDC)) {
+                output_size += 0x04;
+            }
+            break;     
+    }
+
+    return 0;
+}
