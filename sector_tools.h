@@ -220,6 +220,11 @@ class sector_tools {
             uint16_t& bytes_readed,
             optimization_options options
         );
+        static int8_t encoded_sector_size(
+            sector_tools_types type,
+            uint16_t& output_size,
+            optimization_options options
+        );
 
         // Public attributes
         int8_t last_sector_type = -1; 

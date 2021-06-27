@@ -27,6 +27,11 @@ By Daniel Carrasco (https://www.electrosoftcloud.com)
 
 # Changelog
 
+### 20210627
+
+* Changed the manual IN/OUT buffers to C File buffers. The speed is almost the same (6s to 7s), but are much easier to manage.
+* I have decided to keep the C style File because was faster in several tests.
+
 ### 20210618
 
 * Fixed the streams data. The correct data is now stored (counter, compression and type).
