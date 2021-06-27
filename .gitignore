@@ -30,6 +30,7 @@
 
 release/
 **.bk
+.~lock.*
 
 .vscode/
 analysis.txt
