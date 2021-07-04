@@ -569,7 +569,6 @@ static int8_t unecmify(
     uint32_t original_edc = 0;
     uint32_t output_edc = 0;
 
-
     // Streams TOC
     SEC_STR_SIZE streams_toc_count = {0, 0};
     fread(&streams_toc_count, sizeof(streams_toc_count), 1, in);
@@ -587,10 +586,7 @@ static int8_t unecmify(
     // Current sector type (run)
     //
     sector_tools_types curtype = STT_UNKNOWN; // not a valid type
-    uint32_t           curtype_total = 0;
     uint32_t           current_sector = 0;
-    // We will start at sector 00:02:00 which is 0x96 -> 150 / 75 sectors per second
-    uint32_t           total_sectors = 0x96;
 
     // Initializing the Sector Tools object
     sector_tools sTools = sector_tools();
@@ -637,7 +633,7 @@ static int8_t unecmify(
                 out_sector,
                 in_sector,
                 (sector_tools_types)sectors_toc[sectors_toc_actual].mode,
-                current_sector + 0x96, // 0x96 is the first sector
+                current_sector + 0x96, // 0x96 is the first sector "time", equivalent to 00:02:00
                 bytes_readed,
                 options
             );
