@@ -34,7 +34,7 @@ struct STREAM {
     uint8_t type : 1;
     uint8_t compression : 3;
     uint32_t end_sector;
-    uint32_t out_position;
+    uint32_t out_end_position;
 };
 
 struct SECTOR {
@@ -106,7 +106,6 @@ int main(int argc, char** argv) {
     char* outfilename = NULL;
     char* tempfilename = NULL;
     int compression = 0;
-    bool compatible = false;
     bool force_rewrite = false;
 
     // Decode
@@ -163,9 +162,12 @@ int main(int argc, char** argv) {
             printf("An ECM file was detected... will be decoded\n");
             decode = true;
 
-            if (fgetc(in) == 0x00) {
+            if (fgetc(in) != 0x02) {
                 // The file is in the old format, so compatibility will be enabled
-                compatible = true;
+                fclose(in);
+
+                printf("The imput file is not compatible with this program version. The program will exit.\n");
+                return 1;
             }
         }
         else {
@@ -192,24 +194,25 @@ int main(int argc, char** argv) {
             size_t l = strlen(tempfilename);
             if(
                 (l > 4) &&
-                tempfilename[l - 4] == '.' &&
-                tolower(tempfilename[l - 3]) == 'e' &&
-                tolower(tempfilename[l - 2]) == 'c' &&
-                tolower(tempfilename[l - 1]) == 'm'
+                tempfilename[l - 5] == '.' &&
+                tolower(tempfilename[l - 4]) == 'e' &&
+                tolower(tempfilename[l - 3]) == 'c' &&
+                tolower(tempfilename[l - 2]) == 'm' &&
+                tolower(tempfilename[l - 1]) == '2'
             ) {
-                tempfilename[l - 4] = 0;
+                tempfilename[l - 5] = 0;
             } else {
                 //
                 // If that fails, append ".unecm" to the input filename
                 //
-                strcat(tempfilename, ".unecm");
+                strcat(tempfilename, ".unecm2");
             }
         }
         else {
             //
             // Append ".ecm" to the input filename
             //
-            strcat(tempfilename, ".ecm");
+            strcat(tempfilename, ".ecm2");
         }
         outfilename = tempfilename;
     }
@@ -464,6 +467,7 @@ static int8_t ecmify(
 
         // If the next sector correspond to the next stream, advance to it
         if (current_sector == streams_toc[streams_toc_actual].end_sector) {
+            streams_toc[streams_toc_actual].out_end_position = ftello(out);
             streams_toc_actual++;
         }
 
@@ -505,6 +509,10 @@ static int8_t ecmify(
     uint8_t crc[4];
     sTools.put32lsb(crc, input_edc);
     fwrite(crc, 4, 1, out);
+
+    // Rewrite the streams header to store the new data (end position in output file)
+    fseeko(out, 4 + sizeof(streams_toc_count) + sizeof(optimizations), SEEK_SET);
+    fwrite(streams_toc, streams_toc_count.count * sizeof(struct STREAM), 1, out);
 
     // End Of TOC reached, so file should have be processed completly
     if (ftello(in) != in_total_size) {
