@@ -26,6 +26,7 @@
 #include "sector_tools.h"
 #include "getopt.h"
 #include "stdbool.h"
+#include "zlib.h"
 
 // Streams and sectors structs
 #pragma pack(push, 1)
@@ -33,6 +34,7 @@ struct STREAM {
     uint8_t type : 1;
     uint8_t compression : 3;
     uint32_t end_sector;
+    uint32_t out_position;
 };
 
 struct SECTOR {
@@ -57,6 +59,19 @@ static int8_t unecmify(
     const char* infilename,
     const char* outfilename,
     const bool force_rewrite
+);
+int compress_header (
+    uint8_t* dest,
+    uint32_t &destLen,
+    uint8_t* source,
+    uint32_t sourceLen,
+    int level
+);
+int decompress_header (
+    uint8_t* dest,
+    uint32_t &destLen,
+    uint8_t* source,
+    uint32_t sourceLen
 );
 static void resetcounter(off_t total);
 static void encode_progress(void);
@@ -304,7 +319,6 @@ static int8_t ecmify(
     SEC_STR_SIZE streams_toc_count = {0, 0};
     sector_tools_stream_types curstreamtype = STST_UNKNOWN; // not a valid type
 
-
     //
     // Current sector type (run)
     //
@@ -385,7 +399,8 @@ static int8_t ecmify(
         streams_toc[streams_toc_count.count] = {
             (bool)(curstreamtype - 1),
             STC_NONE,
-            current_sector
+            current_sector,
+            0
         };
         streams_toc_count.count++;
 
@@ -396,33 +411,47 @@ static int8_t ecmify(
         };
         sectors_toc_count.count++;
 
-        // Set the size of header
-        streams_toc_count.size = streams_toc_count.count * sizeof(struct STREAM);
-        sectors_toc_count.size = sectors_toc_count.count * sizeof(struct SECTOR);
+        // Compress the sectors header
+        uint32_t sectors_toc_size = sectors_toc_count.count * sizeof(struct SECTOR);
+        char* sectors_toc_c_buffer = (char*) malloc(sectors_toc_size);
+        if(!sectors_toc_c_buffer) {
+            printf("Out of memory\n");
+            return_code = 1;
+        }
 
-        // Once the file is analyzed and we know the TOC, we will process al the data
-        //
-        //printf("Writting header and TOC data to output buffer\n");
-        // Add the Header to the output file
-        uint8_t header[4];
-        header[0] = 'E';
-        header[1] = 'C';
-        header[2] = 'M';
-        header[3] = 0x02; // ECM version. For now 0 is the original version and 1 the new version
-        fwrite(header, 4, 1, out);
-        fwrite(&optimizations, sizeof(optimizations), 1, out);
+        if(!return_code) {
+            compress_header((uint8_t*)sectors_toc_c_buffer, sectors_toc_size, (uint8_t*)sectors_toc, sectors_toc_size, 9);
 
-        // Write the Streams TOC to the output file
-        fwrite(&streams_toc_count, sizeof(streams_toc_count), 1, out);
-        fwrite(streams_toc, streams_toc_count.count * sizeof(struct STREAM), 1, out);
-        // Write the Sectors TOC to the output file
-        fwrite(&sectors_toc_count, sizeof(sectors_toc_count), 1, out);
-        fwrite(sectors_toc, sectors_toc_count.count * sizeof(struct SECTOR), 1, out);
+            printf("\nCompressed Size %d\n", sectors_toc_size);
 
-        // Reset the input file position
-        fseeko(in, 0, SEEK_SET);
-        // Reset the current sector count
-        current_sector = 0;
+            // Set the size of header
+            streams_toc_count.size = streams_toc_count.count * sizeof(struct STREAM);
+            sectors_toc_count.size = sectors_toc_size;
+
+            // Once the file is analyzed and we know the TOC, we will process al the data
+            //
+            //printf("Writting header and TOC data to output buffer\n");
+            // Add the Header to the output file
+            uint8_t header[4];
+            header[0] = 'E';
+            header[1] = 'C';
+            header[2] = 'M';
+            header[3] = 0x02; // ECM version. For now 0 is the original version and 1 the new version
+            fwrite(header, 4, 1, out);
+            fwrite(&optimizations, sizeof(optimizations), 1, out);
+
+            // Write the Streams TOC to the output file
+            fwrite(&streams_toc_count, sizeof(streams_toc_count), 1, out);
+            fwrite(streams_toc, streams_toc_count.count * sizeof(struct STREAM), 1, out);
+            // Write the Sectors TOC to the output file
+            fwrite(&sectors_toc_count, sizeof(sectors_toc_count), 1, out);
+            fwrite(sectors_toc_c_buffer, sectors_toc_size, 1, out);
+
+            // Reset the input file position
+            fseeko(in, 0, SEEK_SET);
+            // Reset the current sector count
+            current_sector = 0;
+        }
     }
 
     //
@@ -580,7 +609,28 @@ static int8_t unecmify(
     SEC_STR_SIZE sectors_toc_count = {0, 0};
     fread(&sectors_toc_count, sizeof(sectors_toc_count), 1, in);
     SECTOR *sectors_toc = new SECTOR[sectors_toc_count.count];
-    fread(sectors_toc, sizeof(SECTOR) * sectors_toc_count.count, 1, in);
+    char* sectors_toc_c_buffer = (char*) malloc(sectors_toc_count.size);
+    if(!sectors_toc_c_buffer) {
+        printf("Out of memory\n");
+        return_code = 1;
+    }
+
+    if (!return_code) {
+        fread(sectors_toc_c_buffer, sectors_toc_count.size, 1, in);
+
+        uint32_t out_size = sectors_toc_count.count * sizeof(SECTOR);
+        if (
+            decompress_header(
+                (uint8_t*)sectors_toc,
+                out_size, 
+                (uint8_t*)sectors_toc_c_buffer,
+                sectors_toc_count.size
+            )
+        ) {
+            printf("There was an error reading the header\n");
+            return_code = 1;
+        }
+    }
 
     //
     // Current sector type (run)
@@ -751,4 +801,65 @@ static void setcounter_decode(off_t n) {
     int8_t p = ((n >> 20) != (mycounter_decode >> 20));
     mycounter_decode = n;
     if(p) { decode_progress(); }
+}
+
+int compress_header (
+    uint8_t* dest,
+    uint32_t &destLen,
+    uint8_t* source,
+    uint32_t sourceLen,
+    int level
+) {
+    z_stream strm;
+    int err;
+
+    strm.zalloc = Z_NULL;
+    strm.zfree = Z_NULL;
+    strm.opaque = Z_NULL;
+    err = deflateInit(&strm, 9);
+    if (err != Z_OK) return err;
+
+    strm.next_out = dest;
+    strm.avail_out = destLen;
+    strm.next_in = source;
+    strm.avail_in = sourceLen;
+    
+    err = deflateInit(&strm, level);
+    if (err != Z_OK) return err;
+
+    err = deflate(&strm, Z_FINISH);
+    deflateEnd(&strm);
+
+    destLen = strm.total_out;
+
+    return err == Z_STREAM_END ? Z_OK : err;
+}
+
+int decompress_header (
+    uint8_t* dest,
+    uint32_t &destLen,
+    uint8_t* source,
+    uint32_t sourceLen
+) {
+    z_stream strm;
+    int err;
+
+    strm.zalloc = Z_NULL;
+    strm.zfree = Z_NULL;
+    strm.opaque = Z_NULL;
+    err = inflateInit(&strm);
+    if (err != Z_OK) return err;
+
+    strm.next_out = dest;
+    strm.avail_out = destLen;
+    strm.next_in = source;
+    strm.avail_in = sourceLen;
+
+    err = inflate(&strm, Z_NO_FLUSH);
+    inflateEnd(&strm);
+
+    return err == Z_STREAM_END ? Z_OK :
+           err == Z_NEED_DICT ? Z_DATA_ERROR  :
+           err == Z_BUF_ERROR && strm.avail_out ? Z_DATA_ERROR :
+           err;
 }
