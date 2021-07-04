@@ -27,6 +27,10 @@ By Daniel Carrasco (https://www.electrosoftcloud.com)
 
 # Changelog
 
+### 20210704
+
+* New ECM file version. This version improves the way the data is stored to allow better random access
+
 ### 20210627
 
 * Changed the manual IN/OUT buffers to C File buffers. The speed is almost the same (6s to 7s), but are much easier to manage.
