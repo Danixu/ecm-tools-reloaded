@@ -1,0 +1,85 @@
+CC=gcc
+CFLAGS= -D_LARGEFILE64_SOURCE=1 -DHAVE_HIDDEN
+
+AR=ar
+ARFLAGS=rc
+RANLIB=ranlib
+
+SRCDIR=
+ZINC=
+
+OBJS = adler32.o compress.o crc32.o deflate.o gzclose.o gzlib.o gzread.o gzwrite.o infback.o inffast.o inflate.o inftrees.o trees.o uncompr.o zutil.o
+
+libzlinux.a: $(OBJS)
+	$(AR) $(ARFLAGS) $@ $(OBJS)
+	-@ ($(RANLIB) $@ || true) >/dev/null 2>&1
+
+adler32.o: $(SRCDIR)adler32.c
+	$(CC) $(CFLAGS) $(ZINC) -c -o $@ $(SRCDIR)adler32.c
+
+crc32.o: $(SRCDIR)crc32.c
+	$(CC) $(CFLAGS) $(ZINC) -c -o $@ $(SRCDIR)crc32.c
+
+deflate.o: $(SRCDIR)deflate.c
+	$(CC) $(CFLAGS) $(ZINC) -c -o $@ $(SRCDIR)deflate.c
+
+infback.o: $(SRCDIR)infback.c
+	$(CC) $(CFLAGS) $(ZINC) -c -o $@ $(SRCDIR)infback.c
+
+inffast.o: $(SRCDIR)inffast.c
+	$(CC) $(CFLAGS) $(ZINC) -c -o $@ $(SRCDIR)inffast.c
+
+inflate.o: $(SRCDIR)inflate.c
+	$(CC) $(CFLAGS) $(ZINC) -c -o $@ $(SRCDIR)inflate.c
+
+inftrees.o: $(SRCDIR)inftrees.c
+	$(CC) $(CFLAGS) $(ZINC) -c -o $@ $(SRCDIR)inftrees.c
+
+trees.o: $(SRCDIR)trees.c
+	$(CC) $(CFLAGS) $(ZINC) -c -o $@ $(SRCDIR)trees.c
+
+zutil.o: $(SRCDIR)zutil.c
+	$(CC) $(CFLAGS) $(ZINC) -c -o $@ $(SRCDIR)zutil.c
+
+compress.o: $(SRCDIR)compress.c
+	$(CC) $(CFLAGS) $(ZINC) -c -o $@ $(SRCDIR)compress.c
+
+uncompr.o: $(SRCDIR)uncompr.c
+	$(CC) $(CFLAGS) $(ZINC) -c -o $@ $(SRCDIR)uncompr.c
+
+gzclose.o: $(SRCDIR)gzclose.c
+	$(CC) $(CFLAGS) $(ZINC) -c -o $@ $(SRCDIR)gzclose.c
+
+gzlib.o: $(SRCDIR)gzlib.c
+	$(CC) $(CFLAGS) $(ZINC) -c -o $@ $(SRCDIR)gzlib.c
+
+gzread.o: $(SRCDIR)gzread.c
+	$(CC) $(CFLAGS) $(ZINC) -c -o $@ $(SRCDIR)gzread.c
+
+gzwrite.o: $(SRCDIR)gzwrite.c
+	$(CC) $(CFLAGS) $(ZINC) -c -o $@ $(SRCDIR)gzwrite.c
+
+mostlyclean: clean
+clean:
+	rm -f *.o *~ \
+	   libzlinux.*
+
+adler32.o zutil.o: $(SRCDIR)zutil.h $(SRCDIR)zlib.h zconf.h
+gzclose.o gzlib.o gzread.o gzwrite.o: $(SRCDIR)zlib.h zconf.h $(SRCDIR)gzguts.h
+compress.o uncompr.o: $(SRCDIR)zlib.h zconf.h
+crc32.o: $(SRCDIR)zutil.h $(SRCDIR)zlib.h zconf.h $(SRCDIR)crc32.h
+deflate.o: $(SRCDIR)deflate.h $(SRCDIR)zutil.h $(SRCDIR)zlib.h zconf.h
+infback.o inflate.o: $(SRCDIR)zutil.h $(SRCDIR)zlib.h zconf.h $(SRCDIR)inftrees.h $(SRCDIR)inflate.h $(SRCDIR)inffast.h $(SRCDIR)inffixed.h
+inffast.o: $(SRCDIR)zutil.h $(SRCDIR)zlib.h zconf.h $(SRCDIR)inftrees.h $(SRCDIR)inflate.h $(SRCDIR)inffast.h
+inftrees.o: $(SRCDIR)zutil.h $(SRCDIR)zlib.h zconf.h $(SRCDIR)inftrees.h
+trees.o: $(SRCDIR)deflate.h $(SRCDIR)zutil.h $(SRCDIR)zlib.h zconf.h $(SRCDIR)trees.h
+
+adler32.lo zutil.lo: $(SRCDIR)zutil.h $(SRCDIR)zlib.h zconf.h
+gzclose.lo gzlib.lo gzread.lo gzwrite.lo: $(SRCDIR)zlib.h zconf.h $(SRCDIR)gzguts.h
+compress.lo uncompr.lo: $(SRCDIR)zlib.h zconf.h
+crc32.lo: $(SRCDIR)zutil.h $(SRCDIR)zlib.h zconf.h $(SRCDIR)crc32.h
+deflate.lo: $(SRCDIR)deflate.h $(SRCDIR)zutil.h $(SRCDIR)zlib.h zconf.h
+infback.lo inflate.lo: $(SRCDIR)zutil.h $(SRCDIR)zlib.h zconf.h $(SRCDIR)inftrees.h $(SRCDIR)inflate.h $(SRCDIR)inffast.h $(SRCDIR)inffixed.h
+inffast.lo: $(SRCDIR)zutil.h $(SRCDIR)zlib.h zconf.h $(SRCDIR)inftrees.h $(SRCDIR)inflate.h $(SRCDIR)inffast.h
+inftrees.lo: $(SRCDIR)zutil.h $(SRCDIR)zlib.h zconf.h $(SRCDIR)inftrees.h
+trees.lo: $(SRCDIR)deflate.h $(SRCDIR)zutil.h $(SRCDIR)zlib.h zconf.h $(SRCDIR)trees.h
