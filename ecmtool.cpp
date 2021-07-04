@@ -295,15 +295,13 @@ static int8_t ecmify(
     // CRC calculation to check the decoded stream
     uint32_t input_edc = 0;
 
-    // Sectors and Streams TOC
+    // Sectors TOC
     SECTOR *sectors_toc = new SECTOR[0xFFFFF];
     SEC_STR_SIZE sectors_toc_count = {0, 0};
-    //uint8_t sectors_toc_count = 0;
 
-    // Streams TOC buffer
+    // Streams TOC
     STREAM *streams_toc = new STREAM[0xFFFFF];
     SEC_STR_SIZE streams_toc_count = {0, 0};
-    //uint8_t streams_toc_count = 0;
     sector_tools_stream_types curstreamtype = STST_UNKNOWN; // not a valid type
 
 
@@ -412,13 +410,13 @@ static int8_t ecmify(
         header[2] = 'M';
         header[3] = 0x02; // ECM version. For now 0 is the original version and 1 the new version
         fwrite(header, 4, 1, out);
-        fwrite(&optimizations, 2, 1, out);
+        fwrite(&optimizations, sizeof(optimizations), 1, out);
 
         // Write the Streams TOC to the output file
-        fwrite(&streams_toc_count, 8, 1, out);
+        fwrite(&streams_toc_count, sizeof(streams_toc_count), 1, out);
         fwrite(streams_toc, streams_toc_count.count * sizeof(struct STREAM), 1, out);
         // Write the Sectors TOC to the output file
-        fwrite(&sectors_toc_count, 8, 1, out);
+        fwrite(&sectors_toc_count, sizeof(sectors_toc_count), 1, out);
         fwrite(sectors_toc, sectors_toc_count.count * sizeof(struct SECTOR), 1, out);
 
         // Reset the input file position
@@ -552,7 +550,7 @@ static int8_t unecmify(
     // Getting the input size to set the progress
     fseeko(in, 0, SEEK_END);
     size_t in_total_size = ftello(in);
-    fseeko(in, 0, SEEK_SET);
+    fseeko(in, 4, SEEK_SET);
     // Reset the counters
     resetcounter(in_total_size);
     // Open output file
@@ -563,72 +561,36 @@ static int8_t unecmify(
     }
     setvbuf(out, out_buffer, _IOFBF, buffer_size);
 
+    // Get the options used at file creation
+    optimization_options options;
+    fread(&options, sizeof(options), 1, in);
+
     // CRC calculator
     uint32_t original_edc = 0;
     uint32_t output_edc = 0;
 
-    // Sectors TOC buffer
-    uint8_t* sectors_toc_buffer = NULL;
-    size_t sectors_toc_buffer_current_ofs = 0;
-    sectors_toc_buffer = (uint8_t*) malloc(0x80000); // A 512Kb buffer to store the sectors TOC
-    if(!sectors_toc_buffer) {
-        printf("Out of memory\n");
-        return 1;
-    }
 
-    // Streams TOC buffer
-    uint8_t* streams_toc_buffer = NULL;
-    size_t streams_toc_buffer_current_ofs = 0;
-    sector_tools_stream_types curstreamtype = STST_UNKNOWN; // not a valid type
-    size_t streams_eos_position = 0;
-    streams_toc_buffer = (uint8_t*) malloc(0x40000); // A 256Kb buffer to store the stream TOC
-    if(!streams_toc_buffer) {
-        printf("Out of memory\n");
-        return 1;
-    }
+    // Streams TOC
+    SEC_STR_SIZE streams_toc_count = {0, 0};
+    fread(&streams_toc_count, sizeof(streams_toc_count), 1, in);
+    STREAM *streams_toc = new STREAM[streams_toc_count.count];
+    fread(streams_toc, sizeof(STREAM) * streams_toc_count.count, 1, in);
+    sector_tools_stream_types curstreamtype = STST_UNKNOWN;
+
+    // Sectors TOC
+    SEC_STR_SIZE sectors_toc_count = {0, 0};
+    fread(&sectors_toc_count, sizeof(sectors_toc_count), 1, in);
+    SECTOR *sectors_toc = new SECTOR[sectors_toc_count.count];
+    fread(sectors_toc, sizeof(SECTOR) * sectors_toc_count.count, 1, in);
 
     //
     // Current sector type (run)
     //
     sector_tools_types curtype = STT_UNKNOWN; // not a valid type
-    uint32_t           curtype_count = 0;
     uint32_t           curtype_total = 0;
+    uint32_t           current_sector = 0;
     // We will start at sector 00:02:00 which is 0x96 -> 150 / 75 sectors per second
     uint32_t           total_sectors = 0x96;
-
-    // Reading the streams header into the buffer
-    fseeko(in, 0x04, SEEK_SET);
-    uint8_t c[1];
-    fread(c, 1, 1, in);
-    while (c[0]) {
-        streams_toc_buffer[streams_toc_buffer_current_ofs] = c[0];
-
-        streams_toc_buffer_current_ofs++;
-        fread(c, 1, 1, in);
-    }
-
-    // We will add the EOD mark the sectors stream
-    streams_toc_buffer[streams_toc_buffer_current_ofs] = 0x00;
-
-    // We will reset the strean to current offset and we will move a
-    // further sector in the input stream
-    streams_toc_buffer_current_ofs = 0;
-    
-    // Reading the sectors header into the buffer
-    fread(c, 1, 1, in);
-    while (c[0]) {
-        sectors_toc_buffer[sectors_toc_buffer_current_ofs] = c[0];
-
-        sectors_toc_buffer_current_ofs++;
-        fread(c, 1, 1, in);
-    }
-
-    // We will add the EOD mark the sectors stream
-    sectors_toc_buffer[sectors_toc_buffer_current_ofs] = 0x00;
-
-    // We will reset the strean to current offset and we will move a
-    // further sector in the input stream
-    sectors_toc_buffer_current_ofs = 0;
 
     // Initializing the Sector Tools object
     sector_tools sTools = sector_tools();
@@ -640,105 +602,74 @@ static int8_t unecmify(
     //
     // Starting the decoding part to generate the output file
     //
-    while (!return_code) {
-        // Before we will calculate the end of stream
-        uint32_t current_stream_end_position = 0;
-        uint8_t readed_bytes = 0;
-        sector_tools_compression compression = STC_NONE;
-        if (ftello(out) == streams_eos_position) {
-            // Get the new stream data
-            int8_t status = sTools.read_stream_type_count(
-                streams_toc_buffer + streams_toc_buffer_current_ofs,
-                compression,
-                curstreamtype,
-                current_stream_end_position,
-                readed_bytes
-            );
-            streams_toc_buffer_current_ofs += readed_bytes;
+    uint32_t streams_toc_actual = 0;
+    for (uint32_t sectors_toc_actual = 0; sectors_toc_actual <= sectors_toc_count.count; sectors_toc_actual++) {
+        if (return_code) { break; } // If there was an error, break the loop
 
-            // We will set the new stream end position
-            streams_eos_position = current_stream_end_position;
+        // If the next sector correspond to the next stream, advance to it
+        if (current_sector == streams_toc[streams_toc_actual].end_sector) {
+            streams_toc_actual++;
         }
 
-        // Getting a new sector type from TOC if required
-        if (curtype_count == curtype_total) {
-            uint8_t readed_bytes = 0;
-            int8_t get_count = sTools.read_type_count(sectors_toc_buffer + sectors_toc_buffer_current_ofs, curtype, curtype_total, readed_bytes);
-
-            if (get_count == -1) {
-                // There was an error getting the count (maybe corrupted file)
+        // Process the sectors count indicated in the toc
+        for (uint32_t curtype_count = 0; curtype_count < sectors_toc[sectors_toc_actual].sector_count; curtype_count++) {
+            if (feof(in)){
+                printf("Unexpected EOF detected.\n");
+                printfileerror(in, infilename);
                 return_code = 1;
-            }
-            else if (!get_count) {
-                // There is no more data in header. Next 4 bytes might be the CRC
-                // Reading it...
-                uint8_t buffer_edc[4];
-                fread(buffer_edc, 4, 1, in);
-                original_edc = sTools.get32lsb(buffer_edc);
-
-                // End Of TOC reached, so file should have be processed completly
-                if (!feof(in) && ftello(in) != in_total_size) {
-                    printf("\n\nThere was an error processing the input file...\n");
-                    return_code = 1;
-                }
-
                 break;
             }
-            sectors_toc_buffer_current_ofs += readed_bytes;
-            curtype_count = 0;
+
+            uint16_t bytes_to_read = 0;
+            // Getting the sector size prior to read, to read the real sector size and avoid to fseek every time
+            sTools.encoded_sector_size(
+                (sector_tools_types)sectors_toc[sectors_toc_actual].mode,
+                bytes_to_read,
+                options
+            );
+
+            // Reading the sector from input
+            fread(in_sector, bytes_to_read, 1, in);
+
+            // Regenerating the sector data
+            uint16_t bytes_readed = 0;
+            sTools.regenerate_sector(
+                out_sector,
+                in_sector,
+                (sector_tools_types)sectors_toc[sectors_toc_actual].mode,
+                current_sector + 0x96, // 0x96 is the first sector
+                bytes_readed,
+                options
+            );
+            // Writting the sector to output file
+            fwrite(out_sector, 2352, 1, out);
+            // Compute the crc of the written data 
+            output_edc = sTools.edc_compute(
+                output_edc,
+                out_sector,
+                2352
+            );
+
+            setcounter_decode(ftello(in));
+            current_sector++;
         }
-
-        if (feof(in)){
-            printf("Unexpected EOF detected. File or headers might be damaged.");
-        }
-
-        // We will regenerate the sector
-        uint16_t bytes_readed = 0;
-        // Getting the sector size prior to read, to read the real sector size and avoid to fseek every time
-        sTools.encoded_sector_size(curtype, bytes_readed,
-            OO_REMOVE_SYNC |
-            OO_REMOVE_ADDR |
-            OO_REMOVE_MODE |
-            OO_REMOVE_BLANKS |
-            OO_REMOVE_REDUNDANT_FLAG |
-            OO_REMOVE_ECC |
-            OO_REMOVE_EDC |
-            OO_REMOVE_GAP
-        );
-        // Reading the sector from input
-        fread(in_sector, bytes_readed, 1, in);
-        // Regenerating the sector data
-        sTools.regenerate_sector(out_sector, in_sector, curtype, total_sectors, bytes_readed,
-            OO_REMOVE_SYNC |
-            OO_REMOVE_ADDR |
-            OO_REMOVE_MODE |
-            OO_REMOVE_BLANKS |
-            OO_REMOVE_REDUNDANT_FLAG |
-            OO_REMOVE_ECC |
-            OO_REMOVE_EDC |
-            OO_REMOVE_GAP
-        );
-        // Writting the sector to output file
-        fwrite(out_sector, 2352, 1, out);
-        // Compute the crc of the written data 
-        output_edc = sTools.edc_compute(
-            output_edc,
-            out_sector,
-            2352
-        );
-
-        setcounter_decode(ftello(in));
-        curtype_count++;
-        total_sectors++;
     }
 
+    // There is no more data in header. Next 4 bytes might be the CRC
+    // Reading it...
+    uint8_t buffer_edc[4];
+    fread(buffer_edc, 4, 1, in);
+    original_edc = sTools.get32lsb(buffer_edc);
+
+    // Flushing data and closing files
     fflush(out);
     fclose(in);
     fclose(out);
+    // Freeing reserved memory
     free(in_buffer);
     free(out_buffer);
-    free(sectors_toc_buffer);
-    free(streams_toc_buffer);
+    delete[] sectors_toc;
+    delete[] streams_toc;
     if (original_edc == output_edc) {
         printf("\n\nFinished!\n");
     }

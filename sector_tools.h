@@ -146,20 +146,20 @@ enum sector_tools_stream_types : uint8_t {
 //
 // Optimization options available
 //
-enum optimization_options : uint16_t {
+enum optimization_options : uint8_t {
     OO_NONE                  = 0,    // Just copy the input. Surelly will not be used
-    OO_REMOVE_SYNC           = 1<<1, // Remove sync bytes (a.k.a first 12 bytes)
-    OO_REMOVE_ADDR           = 1<<2, // Remove the ADDR bytes
-    OO_REMOVE_MODE           = 1<<3, // Remove the MODE byte
-    OO_REMOVE_BLANKS         = 1<<4, // If sector type is a GAP, remove the data
-    OO_REMOVE_REDUNDANT_FLAG = 1<<5, // Remove the redundant copy of FLAG bytes in Mode 2 XA sectors
-    OO_REMOVE_ECC            = 1<<6, // Remove the ECC
-    OO_REMOVE_EDC            = 1<<7, // Remove the EDC
-    OO_REMOVE_GAP            = 1<<8  // If sector type is a GAP, remove the data
+    OO_REMOVE_SYNC           = 1, // Remove sync bytes (a.k.a first 12 bytes)
+    OO_REMOVE_ADDR           = 1<<1, // Remove the ADDR bytes
+    OO_REMOVE_MODE           = 1<<2, // Remove the MODE byte
+    OO_REMOVE_BLANKS         = 1<<3, // If sector type is a GAP, remove the data
+    OO_REMOVE_REDUNDANT_FLAG = 1<<4, // Remove the redundant copy of FLAG bytes in Mode 2 XA sectors
+    OO_REMOVE_ECC            = 1<<5, // Remove the ECC
+    OO_REMOVE_EDC            = 1<<6, // Remove the EDC
+    OO_REMOVE_GAP            = 1<<7  // If sector type is a GAP, remove the data
 };
 inline optimization_options operator|(optimization_options a, optimization_options b)
 {
-    return static_cast<optimization_options>(static_cast<uint16_t>(a) | static_cast<uint16_t>(b));
+    return static_cast<optimization_options>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b));
 }
 
 
