@@ -27,9 +27,24 @@ By Daniel Carrasco (https://www.electrosoftcloud.com)
 
 # Changelog
 
+### 20210706
+
+* Added a "block size" header to help to the random seek decoder to know how many sectors there are in every block
+* Added compression level option to program
+* Fixed a bug in zlib compression in encoding phase
+* Fixed a bug in zlib compression in decoding phase
+* Now zlib compression is fully working
+* Updated help message
+* Fixed a bug in stream change detection
+
+### 20210705
+
+* Added zlib compression to decoding (Not working yet because need more fixes)
+
 ### 20210704
 
 * New ECM file version. This version improves the way the data is stored to allow better random access
+* Added zlib compression to encoding (Not working yet because must be implemented in decoding too)
 
 ### 20210627
 

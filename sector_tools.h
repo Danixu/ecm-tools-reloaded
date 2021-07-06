@@ -94,6 +94,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include "compressor.h"
 
 // 
 // Return codes of the class methods
@@ -118,20 +119,6 @@ enum sector_tools_types : uint8_t {
     STT_MODE2_1_GAP,
     STT_MODE2_2,
     STT_MODE2_2_GAP
-};
-
-//
-// Stream types detectable by the class
-//
-enum sector_tools_compression : uint8_t {
-    STC_NONE = 0,
-    STC_AUDIO_FLAC,
-    STC_AUDIO_APE,
-    STC_AUDIO_WAVPACK,
-    STC_DATA_ZLIB = 1,
-    STC_DATA_LZMA,
-    STC_DATA_BZ2,
-    STC_DATA_LZ4
 };
 
 //

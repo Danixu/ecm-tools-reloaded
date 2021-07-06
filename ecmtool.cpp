@@ -26,7 +26,12 @@
 #include "sector_tools.h"
 #include "getopt.h"
 #include "stdbool.h"
+#include <string>
+#include <stdexcept>
 #include "zlib.h"
+
+// Configurations
+#define SECTORS_PER_BLOCK 100
 
 // Streams and sectors structs
 #pragma pack(push, 1)
@@ -53,7 +58,12 @@ void print_help();
 static int8_t ecmify(
     const char* infilename,
     const char* outfilename,
-    const bool force_rewrite
+    const bool force_rewrite,
+    sector_tools_compression data_compression,
+    sector_tools_compression audio_compression,
+    uint8_t compression_level,
+    bool seekable,
+    uint8_t sectors_per_block
 );
 static int8_t unecmify(
     const char* infilename,
@@ -95,7 +105,11 @@ static off_t mycounter_total   = 0;
 static struct option long_options[] = {
     {"input", required_argument, NULL, 'i'},
     {"output", required_argument, NULL, 'o'},
-    {"compression", required_argument, NULL, 'c'},
+    {"acompression", required_argument, NULL, 'a'},
+    {"dcompression", required_argument, NULL, 'd'},
+    {"clevel", required_argument, NULL, 'c'},
+    {"seekable", no_argument, NULL, 's'},
+    {"sectors_per_block", required_argument, NULL, 'p'},
     {"force", required_argument, NULL, 'f'},
     {NULL, 0, NULL, 0}
 };
@@ -105,14 +119,23 @@ int main(int argc, char** argv) {
     char* infilename  = NULL;
     char* outfilename = NULL;
     char* tempfilename = NULL;
-    int compression = 0;
+    sector_tools_compression audio_compression = C_NONE;
+    sector_tools_compression data_compression = C_NONE;
+    uint8_t compression_level = 5;
     bool force_rewrite = false;
+    // ZLIB will be seekable
+    bool seekable = false;
+    uint8_t sectors_per_block = SECTORS_PER_BLOCK;
 
     // Decode
     bool decode = false;
 
+    // temporal variables for options parsing
+    uint64_t temp_argument = 0;
+    const char *errstr;
+
     char ch;
-    while ((ch = getopt_long(argc, argv, "i:o:c:f", long_options, NULL)) != -1)
+    while ((ch = getopt_long(argc, argv, "i:o:a:d:c:sp:f", long_options, NULL)) != -1)
     {
         // check to see if a single character or long option came through
         switch (ch)
@@ -121,18 +144,88 @@ int main(int argc, char** argv) {
             case 'i':
                 infilename = optarg;
                 break;
+
             // short option '-o', long option "--output"
             case 'o':
                 outfilename = optarg;
                 break;
-            // short option '-c', long option "--compression"
-            case 'c':
-                compression = true;
+
+            // short option '-a', long option "--acompression"
+            // Audio compression option
+            case 'a':
+                /*
+                if (optarg == "wavpack") {
+                    audio_compression = C_AUDIO_WAVPACK;
+                }
+                */
                 break;
+
+            // short option '-d', long option '--dcompression'
+            // Data compression option
+            case 'd':
+                if (strcmp("zlib", optarg) == 0) {
+                    data_compression = C_DATA_ZLIB;
+                }
+                else {
+                    printf("Error: Unknown data compression mode: %s\n\n", optarg);
+                    print_help();
+                    return 1;
+                }
+                break;
+
+            // short option '-c', long option "--clevel"
+            case 'c':
+                try {
+                    std::string optarg_s(optarg);
+                    temp_argument = std::stoi(optarg_s);
+
+                    if (temp_argument > 9 || temp_argument < 0) {
+                        printf("Error: the provided compression level option is not correct.\n\n");
+                        print_help();
+                        return 1;
+                    }
+                    else {
+                        compression_level = (uint8_t)temp_argument;
+                    }
+                } catch (std::exception const &e) {
+                    printf("Error: the provided compression level option is not correct.\n\n");
+                    print_help();
+                    return 1;
+                }
+
+                break;
+
+             // short option '-s', long option "--seekable"
+            case 's':
+                seekable = true;
+                break;
+
+            // short option '-p', long option "--sectors_per_block"
+            case 'p':
+                try {
+                    std::string optarg_s(optarg);
+                    temp_argument = std::stoi(optarg_s);
+
+                    if (!temp_argument || temp_argument > 255 || temp_argument < 0) {
+                        printf("Error: the provided sectors per block number is not correct.\n\n");
+                        print_help();
+                        return 1;
+                    }
+                    else {
+                        sectors_per_block = (uint8_t)temp_argument;
+                    }
+                } catch (std::exception const &e) {
+                    printf("Error: the provided sectors per block number is not correct.\n\n");
+                    print_help();
+                    return 1;
+                }
+                break;
+
             // short option '-f', long option "--force"
             case 'f':
                 force_rewrite = true;
                 break;
+
             case '?':
                 print_help();
                 return 1;
@@ -221,7 +314,16 @@ int main(int argc, char** argv) {
         unecmify(infilename, outfilename, force_rewrite);
     }
     else {
-        ecmify(infilename, outfilename, force_rewrite);
+        ecmify(
+            infilename,
+            outfilename,
+            force_rewrite,
+            data_compression,
+            audio_compression,
+            compression_level,
+            seekable,
+            sectors_per_block
+        );
     }
 }
 
@@ -229,7 +331,12 @@ int main(int argc, char** argv) {
 static int8_t ecmify(
     const char* infilename,
     const char* outfilename,
-    const bool force_rewrite
+    const bool force_rewrite,
+    sector_tools_compression data_compression,
+    sector_tools_compression audio_compression,
+    uint8_t compression_level,
+    bool seekable,
+    uint8_t sectors_per_block
 ) {
     // IN/OUT files definition
     FILE* in  = NULL;
@@ -277,6 +384,15 @@ static int8_t ecmify(
     if(!out_buffer) {
         printf("Out of memory\n");
         return 1;
+    }
+    // Allocate compressor buffer if required
+    uint8_t* comp_buffer = NULL;
+    if (data_compression == C_DATA_ZLIB) {
+        comp_buffer = (uint8_t*) malloc(buffer_size);
+        if(!comp_buffer) {
+            printf("Out of memory\n");
+            return 1;
+        }
     }
 
     // Open input file
@@ -329,65 +445,72 @@ static int8_t ecmify(
     uint32_t           curtype_count = 0;
     uint32_t           current_sector = 0;
 
+    // Sector Tools object
     sector_tools sTools = sector_tools();
+
+    // Compressor
+    compressor *compobj = NULL;
 
     // Sector buffer
     uint8_t in_sector[2352];
     uint8_t out_sector[2352];
 
-    // Read the first sector to fill the in_sector buffer
-    fread(in_sector, 2352, 1, in);
-    current_sector++;
-
     //
     // Starting the analyzing part to generate the TOC header
     //
     while (!feof(in)) {
-        sector_tools_types detected_type = sTools.detect(in_sector);
-
-        if (detected_type == curtype) {
-            // Same type as last sector
-            curtype_count++;
-        }
-        else {
-            // Checking if the stream type is different than the last one
-            sector_tools_stream_types stream_type = sTools.detect_stream(curtype);
-
-            if (curstreamtype == STST_UNKNOWN) {
-                // First stream position. We need the end of stream, so we will just save the type
-                curstreamtype = stream_type;
-            }
-            else if (stream_type != curstreamtype) {
-                // nTH stream, saving the position as "END" of the last stream
-                streams_toc[streams_toc_count.count] = {
-                    (bool)(stream_type - 1),
-                    STC_NONE,
-                    current_sector
-                };
-                streams_toc_count.count++;
-                curstreamtype = stream_type;
-            }
-
-            if(curtype_count > 0) {
-                // Generate the sector mode data
-                sectors_toc[sectors_toc_count.count] = {
-                    curtype,
-                    curtype_count
-                };
-
-                sectors_toc_count.count++;
-            }
-
-            curtype = detected_type;
-            curtype_count = 1;
-        }
-
         // Read the next sector
         if (fread(in_sector, 2352, 1, in)) {
             // Add a sector to the count
             current_sector++;
             // Update the input file position
             setcounter_analyze(ftello(in));
+
+            sector_tools_types detected_type = sTools.detect(in_sector);
+
+            if (detected_type == curtype) {
+                // Same type as last sector
+                curtype_count++;
+            }
+            else {
+                // Checking if the stream type is different than the last one
+                sector_tools_stream_types stream_type = sTools.detect_stream(detected_type);
+
+                if (curstreamtype == STST_UNKNOWN) {
+                    // First stream position. We need the end of stream, so we will just save the type
+                    curstreamtype = stream_type;
+                }
+                else if (stream_type != curstreamtype) {
+                    // nTH stream, saving the position as "END" of the last stream
+                    sector_tools_compression compression;
+                    if (curstreamtype == STST_AUDIO) {
+                        compression = audio_compression;
+                    }
+                    else {
+                        compression = data_compression;
+                    }
+                    streams_toc[streams_toc_count.count] = {
+                        (bool)(curstreamtype - 1),
+                        compression,
+                        current_sector
+                    };
+                    streams_toc_count.count++;
+                    curstreamtype = stream_type;
+                }
+
+                if(curtype_count > 0) {
+                    // Generate the sector mode data
+                    sectors_toc[sectors_toc_count.count] = {
+                        curtype,
+                        curtype_count
+                    };
+
+                    sectors_toc_count.count++;
+                }
+
+                curtype = detected_type;
+                curtype_count = 1;
+            }
         }
         else if(ferror(in)) {
             // Something strange happens
@@ -399,9 +522,16 @@ static int8_t ecmify(
 
     if(!return_code) {
         // Set the last stream end position
+        sector_tools_compression compression;
+        if (curstreamtype == STST_AUDIO) {
+            compression = audio_compression;
+        }
+        else {
+            compression = data_compression;
+        }
         streams_toc[streams_toc_count.count] = {
             (bool)(curstreamtype - 1),
-            STC_NONE,
+            compression,
             current_sector,
             0
         };
@@ -425,8 +555,6 @@ static int8_t ecmify(
         if(!return_code) {
             compress_header((uint8_t*)sectors_toc_c_buffer, sectors_toc_size, (uint8_t*)sectors_toc, sectors_toc_size, 9);
 
-            printf("\nCompressed Size %d\n", sectors_toc_size);
-
             // Set the size of header
             streams_toc_count.size = streams_toc_count.count * sizeof(struct STREAM);
             sectors_toc_count.size = sectors_toc_size;
@@ -435,12 +563,13 @@ static int8_t ecmify(
             //
             //printf("Writting header and TOC data to output buffer\n");
             // Add the Header to the output file
-            uint8_t header[4];
+            uint8_t header[5];
             header[0] = 'E';
             header[1] = 'C';
             header[2] = 'M';
             header[3] = 0x02; // ECM version. For now 0 is the original version and 1 the new version
-            fwrite(header, 4, 1, out);
+            header[4] = seekable ? sectors_per_block : (uint8_t)0;
+            fwrite(header, 5, 1, out);
             fwrite(&optimizations, sizeof(optimizations), 1, out);
 
             // Write the Streams TOC to the output file
@@ -453,7 +582,7 @@ static int8_t ecmify(
             // Reset the input file position
             fseeko(in, 0, SEEK_SET);
             // Reset the current sector count
-            current_sector = 0;
+            current_sector = 1;
         }
     }
 
@@ -462,13 +591,26 @@ static int8_t ecmify(
     //
     uint32_t streams_toc_actual = 0;
     // Loop through every sector type in toc
-    for (uint32_t sectors_toc_actual = 0; sectors_toc_actual <= sectors_toc_count.count; sectors_toc_actual++) {
+    for (uint32_t sectors_toc_actual = 0; sectors_toc_actual < sectors_toc_count.count; sectors_toc_actual++) {
         if (return_code) { break; } // If there was an error, break the loop
 
         // If the next sector correspond to the next stream, advance to it
         if (current_sector == streams_toc[streams_toc_actual].end_sector) {
+            if (compobj) {
+                size_t compress_buffer_left = 0;
+                compobj -> compress(compress_buffer_left, out_sector, 0, Z_FINISH);
+                fwrite(comp_buffer, buffer_size - compress_buffer_left, 1, out);
+                compobj -> close();
+                compobj = NULL;
+            }
+
             streams_toc[streams_toc_actual].out_end_position = ftello(out);
             streams_toc_actual++;
+        }
+
+        if (data_compression && !compobj) {
+            compobj = new compressor(data_compression, true, compression_level);
+            compobj -> set_output(comp_buffer, buffer_size);
         }
 
         // Process the sectors count indicated in the toc
@@ -498,11 +640,45 @@ static int8_t ecmify(
                 optimizations
             );
 
-            fwrite(out_sector, output_size, 1, out);
+            if ((streams_toc[streams_toc_actual].type + 1) == STST_AUDIO) {
+                switch (audio_compression) {
+                case C_NONE:
+                    fwrite(out_sector, output_size, 1, out);
+                    break;
+                }
+            }
+            else {
+                switch (data_compression) {
+                // No compression
+                case C_NONE:
+                    fwrite(out_sector, output_size, 1, out);
+                    break;
+
+                // Zlib compression
+                case C_DATA_ZLIB:
+                    size_t compress_buffer_left = 0;
+                    if (seekable && (sectors_per_block == 1 || !((current_sector + 1) % sectors_per_block))) {
+                        // A new compressor block is required
+                        compobj -> compress(compress_buffer_left, out_sector, output_size, Z_FULL_FLUSH);
+                    }
+                    else {
+                        compobj -> compress(compress_buffer_left, out_sector, output_size, Z_NO_FLUSH);
+                    }
+
+                    // If buffer is above 75%, write the data to the output and reset the state
+                    if (compress_buffer_left < (buffer_size * 0.25)) {
+                        fwrite(comp_buffer, buffer_size - compress_buffer_left, 1, out);
+                        compobj -> set_output(comp_buffer, buffer_size);
+                    }
+                    break;
+                }
+            }
             setcounter_encode(ftello(in));
-            current_sector++;
-        }
-        
+            // If we are not in end of file, sum a sector
+            if (ftello(in) != in_total_size) {
+                current_sector++;
+            }
+       }  
     }
 
     // Add the CRC to the output file
@@ -510,8 +686,19 @@ static int8_t ecmify(
     sTools.put32lsb(crc, input_edc);
     fwrite(crc, 4, 1, out);
 
+    // Close the last stream and flush their compressed data (if exists)
+    if (compobj) {
+        size_t compress_buffer_left = 0;
+        compobj -> compress(compress_buffer_left, out_sector, 0, Z_FINISH);
+        fwrite(comp_buffer, buffer_size - compress_buffer_left, 1, out);
+        compobj -> close();
+        compobj = NULL;
+    }
+
+    streams_toc[streams_toc_actual].out_end_position = ftello(out);
+
     // Rewrite the streams header to store the new data (end position in output file)
-    fseeko(out, 4 + sizeof(streams_toc_count) + sizeof(optimizations), SEEK_SET);
+    fseeko(out, 5 + sizeof(streams_toc_count) + sizeof(optimizations), SEEK_SET);
     fwrite(streams_toc, streams_toc_count.count * sizeof(struct STREAM), 1, out);
 
     // End Of TOC reached, so file should have be processed completly
@@ -576,6 +763,8 @@ static int8_t unecmify(
         printf("Out of memory\n");
         return 1;
     }
+    // Allocate compressor buffer if required
+    uint8_t* decomp_buffer = NULL;
 
     // Open input file
     in = fopen(infilename, "rb");
@@ -587,7 +776,7 @@ static int8_t unecmify(
     // Getting the input size to set the progress
     fseeko(in, 0, SEEK_END);
     size_t in_total_size = ftello(in);
-    fseeko(in, 4, SEEK_SET);
+    fseeko(in, 5, SEEK_SET);
     // Reset the counters
     resetcounter(in_total_size);
     // Open output file
@@ -611,7 +800,6 @@ static int8_t unecmify(
     fread(&streams_toc_count, sizeof(streams_toc_count), 1, in);
     STREAM *streams_toc = new STREAM[streams_toc_count.count];
     fread(streams_toc, sizeof(STREAM) * streams_toc_count.count, 1, in);
-    sector_tools_stream_types curstreamtype = STST_UNKNOWN;
 
     // Sectors TOC
     SEC_STR_SIZE sectors_toc_count = {0, 0};
@@ -644,25 +832,67 @@ static int8_t unecmify(
     // Current sector type (run)
     //
     sector_tools_types curtype = STT_UNKNOWN; // not a valid type
-    uint32_t           current_sector = 0;
+    uint32_t           current_sector = 1;
 
     // Initializing the Sector Tools object
     sector_tools sTools = sector_tools();
+
+    // Decompressor
+    compressor *decompobj = NULL;
 
     // Sector buffer
     uint8_t in_sector[2352];
     uint8_t out_sector[2352];
 
+    // End Of Stream mark
+    bool end_of_stream = false;
+
     //
     // Starting the decoding part to generate the output file
     //
     uint32_t streams_toc_actual = 0;
-    for (uint32_t sectors_toc_actual = 0; sectors_toc_actual <= sectors_toc_count.count; sectors_toc_actual++) {
+    for (uint32_t sectors_toc_actual = 0; sectors_toc_actual < sectors_toc_count.count; sectors_toc_actual++) {
         if (return_code) { break; } // If there was an error, break the loop
 
         // If the next sector correspond to the next stream, advance to it
         if (current_sector == streams_toc[streams_toc_actual].end_sector) {
+            // No flush required as the last sector should have been read
+            if (decompobj) {
+                decompobj -> close();
+                decompobj = NULL;
+            }
+
+            // Free the decomp buffer to avoid memory leak
+            if (decomp_buffer) {
+                free(decomp_buffer);
+            }
             streams_toc_actual++;
+        }
+
+        // If stream is compressed and there's no decomp object, create a buffer in memory
+        // for the decompression, fill that buffet with the stream data and create the decomp 
+        // object.
+        if (streams_toc[streams_toc_actual].compression && !decompobj) {
+            // Create the decompression buffer
+            decomp_buffer = (uint8_t*) malloc(buffer_size);
+            if(!decomp_buffer) {
+                printf("Out of memory\n");
+                return_code = 1;
+                break;
+            }
+            // Check if stream size is smaller than the buffer size and use the smaller size as "to_read"
+            size_t to_read = buffer_size;
+            size_t stream_size = streams_toc[streams_toc_actual].out_end_position - ftello(in);
+            if (to_read > stream_size) {
+                to_read = stream_size;
+                end_of_stream = true;
+            }
+            // Read the data into the buffer
+            fread(decomp_buffer, to_read, 1, in);
+            // Create a new decompressor object
+            decompobj = new compressor((sector_tools_compression)streams_toc[streams_toc_actual].compression, false);
+            // Set the input buffer position as "input" in decompressor object
+            decompobj -> set_input(decomp_buffer, to_read);
         }
 
         // Process the sectors count indicated in the toc
@@ -682,8 +912,43 @@ static int8_t unecmify(
                 options
             );
 
-            // Reading the sector from input
-            fread(in_sector, bytes_to_read, 1, in);
+            size_t decompress_buffer_left = 0;
+            switch (streams_toc[streams_toc_actual].compression) {
+            // No compression
+            case C_NONE:
+                fread(in_sector, bytes_to_read, 1, in);
+                break;
+
+            // Zlib compression
+            case C_DATA_ZLIB:
+                // Decompress the sector data
+                decompobj -> decompress(in_sector, bytes_to_read, decompress_buffer_left, Z_SYNC_FLUSH);
+
+                // If not in end of stream and buffer is below 25%, read more data
+                // To keep the buffer always ready
+                if (!end_of_stream && decompress_buffer_left < (buffer_size * 0.25)) {
+                    // Move the left data to first bytes
+                    size_t position = buffer_size - decompress_buffer_left;
+                    memmove(decomp_buffer, decomp_buffer + position, decompress_buffer_left);
+
+                    // Calculate how much data can be readed
+                    size_t to_read = buffer_size - decompress_buffer_left;
+                    // If available space is bigger than data in stream, read only the stream data
+                    size_t stream_size = streams_toc[streams_toc_actual].out_end_position - ftello(in);
+                    if (to_read > stream_size) {
+                        to_read = stream_size;
+                        // If left data is less than buffer space, then end_of_stream is reached
+                        end_of_stream = true;
+                    }
+                    // Fill the buffer with the stream data
+                    fread(decomp_buffer + decompress_buffer_left, to_read, 1, in);
+                    // Set again the input position to first byte in decomp_buffer and set the buffer size
+                    size_t input_size = decompress_buffer_left + to_read;
+                    decompobj -> set_input(decomp_buffer, input_size);
+                }
+
+                break;
+            }
 
             // Regenerating the sector data
             uint16_t bytes_readed = 0;
@@ -691,10 +956,12 @@ static int8_t unecmify(
                 out_sector,
                 in_sector,
                 (sector_tools_types)sectors_toc[sectors_toc_actual].mode,
-                current_sector + 0x96, // 0x96 is the first sector "time", equivalent to 00:02:00
+                current_sector - 1 + 0x96, // 0x96 is the first sector "time", equivalent to 00:02:00
                 bytes_readed,
                 options
             );
+
+
             // Writting the sector to output file
             fwrite(out_sector, 2352, 1, out);
             // Compute the crc of the written data 
@@ -704,6 +971,7 @@ static int8_t unecmify(
                 2352
             );
 
+            // Set the current position in file
             setcounter_decode(ftello(in));
             current_sector++;
         }
@@ -747,12 +1015,16 @@ void print_help() {
         "    ecmtool -i/--input ecmfile\n"
         "    ecmtool -i/--input ecmfile -o/--output cdimagefile\n"
         "\n"
-        "Optional:\n"
-        "    -d/--compatible\n"
-        "           Use the old ecm format compatible with the original tool\n"
-        "           Will be ignored when decoding because the version is autodetected\n"
-        "    -c/--compression <gzip/lzma>\n"
-        "           Compress the stream using the provided algorithm (Not implemented yet)\n"
+        "Optional options:\n"
+        "    -d/--dcompression <zlib>\n"
+        "           Enable data compression\n"
+        "    -c/--clevel <0-9>\n"
+        "           Compression level between 0 and 9"
+        "    -s/--seekable\n"
+        "           Create a seekable file. Reduce the compression ratio but\n"
+        "           but allow to seek into the stream.\n"
+        "    -p/--sectors_per_block <sectors>\n"
+        "           Add a end of block mark every X sectors in a seekable file. Max 255.\n"
         "    -f/--force\n"
         "           Force to ovewrite the output file\n"
     );
