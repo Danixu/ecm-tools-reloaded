@@ -657,7 +657,11 @@ static int8_t ecmify(
                 // Zlib compression
                 case C_DATA_ZLIB:
                     size_t compress_buffer_left = 0;
-                    if (seekable && (sectors_per_block == 1 || !((current_sector + 1) % sectors_per_block))) {
+                    // Current sector is the last stream sector
+                    if ((current_sector+1) == streams_toc[streams_toc_actual].end_sector) {
+                        compobj -> compress(compress_buffer_left, out_sector, output_size, Z_FINISH);
+                    }
+                    else if (seekable && (sectors_per_block == 1 || !((current_sector + 1) % sectors_per_block))) {
                         // A new compressor block is required
                         compobj -> compress(compress_buffer_left, out_sector, output_size, Z_FULL_FLUSH);
                     }
@@ -665,8 +669,8 @@ static int8_t ecmify(
                         compobj -> compress(compress_buffer_left, out_sector, output_size, Z_NO_FLUSH);
                     }
 
-                    // If buffer is above 75%, write the data to the output and reset the state
-                    if (compress_buffer_left < (buffer_size * 0.25)) {
+                    // If buffer is above 75% or is the last sector, write the data to the output and reset the state
+                    if (compress_buffer_left < (buffer_size * 0.25) || (current_sector+1) == streams_toc[streams_toc_actual].end_sector) {
                         fwrite(comp_buffer, buffer_size - compress_buffer_left, 1, out);
                         compobj -> set_output(comp_buffer, buffer_size);
                     }
@@ -681,21 +685,18 @@ static int8_t ecmify(
        }  
     }
 
-    // Add the CRC to the output file
-    uint8_t crc[4];
-    sTools.put32lsb(crc, input_edc);
-    fwrite(crc, 4, 1, out);
-
-    // Close the last stream and flush their compressed data (if exists)
+    // Close the compression object
     if (compobj) {
-        size_t compress_buffer_left = 0;
-        compobj -> compress(compress_buffer_left, out_sector, 0, Z_FINISH);
-        fwrite(comp_buffer, buffer_size - compress_buffer_left, 1, out);
         compobj -> close();
         compobj = NULL;
     }
 
     streams_toc[streams_toc_actual].out_end_position = ftello(out);
+
+    // Add the CRC to the output file
+    uint8_t crc[4];
+    sTools.put32lsb(crc, input_edc);
+    fwrite(crc, 4, 1, out);
 
     // Rewrite the streams header to store the new data (end position in output file)
     fseeko(out, 5 + sizeof(streams_toc_count) + sizeof(optimizations), SEEK_SET);
