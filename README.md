@@ -35,6 +35,7 @@ By Daniel Carrasco (https://www.electrosoftcloud.com)
 * Fixed a bug in zlib compression in decoding phase
 * Now zlib compression is fully working
 * Updated help message
+* Fixed a bug in stream change detection
 
 ### 20210705
 

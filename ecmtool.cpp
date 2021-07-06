@@ -455,66 +455,62 @@ static int8_t ecmify(
     uint8_t in_sector[2352];
     uint8_t out_sector[2352];
 
-    // Read the first sector to fill the in_sector buffer
-    fread(in_sector, 2352, 1, in);
-    current_sector++;
-
     //
     // Starting the analyzing part to generate the TOC header
     //
     while (!feof(in)) {
-        sector_tools_types detected_type = sTools.detect(in_sector);
-
-        if (detected_type == curtype) {
-            // Same type as last sector
-            curtype_count++;
-        }
-        else {
-            // Checking if the stream type is different than the last one
-            sector_tools_stream_types stream_type = sTools.detect_stream(curtype);
-
-            if (curstreamtype == STST_UNKNOWN) {
-                // First stream position. We need the end of stream, so we will just save the type
-                curstreamtype = stream_type;
-            }
-            else if (stream_type != curstreamtype) {
-                // nTH stream, saving the position as "END" of the last stream
-                sector_tools_compression compression;
-                if (curstreamtype == STST_AUDIO) {
-                    compression = audio_compression;
-                }
-                else {
-                    compression = data_compression;
-                }
-                streams_toc[streams_toc_count.count] = {
-                    (bool)(curstreamtype - 1),
-                    compression,
-                    current_sector
-                };
-                streams_toc_count.count++;
-                curstreamtype = stream_type;
-            }
-
-            if(curtype_count > 0) {
-                // Generate the sector mode data
-                sectors_toc[sectors_toc_count.count] = {
-                    curtype,
-                    curtype_count
-                };
-
-                sectors_toc_count.count++;
-            }
-
-            curtype = detected_type;
-            curtype_count = 1;
-        }
-
         // Read the next sector
         if (fread(in_sector, 2352, 1, in)) {
             // Add a sector to the count
             current_sector++;
             // Update the input file position
             setcounter_analyze(ftello(in));
+
+            sector_tools_types detected_type = sTools.detect(in_sector);
+
+            if (detected_type == curtype) {
+                // Same type as last sector
+                curtype_count++;
+            }
+            else {
+                // Checking if the stream type is different than the last one
+                sector_tools_stream_types stream_type = sTools.detect_stream(detected_type);
+
+                if (curstreamtype == STST_UNKNOWN) {
+                    // First stream position. We need the end of stream, so we will just save the type
+                    curstreamtype = stream_type;
+                }
+                else if (stream_type != curstreamtype) {
+                    // nTH stream, saving the position as "END" of the last stream
+                    sector_tools_compression compression;
+                    if (curstreamtype == STST_AUDIO) {
+                        compression = audio_compression;
+                    }
+                    else {
+                        compression = data_compression;
+                    }
+                    streams_toc[streams_toc_count.count] = {
+                        (bool)(curstreamtype - 1),
+                        compression,
+                        current_sector
+                    };
+                    streams_toc_count.count++;
+                    curstreamtype = stream_type;
+                }
+
+                if(curtype_count > 0) {
+                    // Generate the sector mode data
+                    sectors_toc[sectors_toc_count.count] = {
+                        curtype,
+                        curtype_count
+                    };
+
+                    sectors_toc_count.count++;
+                }
+
+                curtype = detected_type;
+                curtype_count = 1;
+            }
         }
         else if(ferror(in)) {
             // Something strange happens
