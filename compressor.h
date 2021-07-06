@@ -23,9 +23,10 @@ class compressor {
     // Public methods
         compressor(sector_tools_compression mode, bool is_compression, int8_t comp_level = -1);
 
+        int8_t set_input(uint8_t* in, size_t &in_size);
         int8_t set_output(uint8_t* out, size_t &out_size);
         int8_t compress(size_t &out_size, uint8_t* in, size_t in_size, uint8_t flusmode = Z_NO_FLUSH);
-        int8_t decompress(uint8_t* out, size_t out_size, uint8_t* in, size_t in_size, uint8_t flusmode = Z_NO_FLUSH);
+        int8_t decompress(uint8_t* out, size_t out_size, size_t &in_size, uint8_t flusmode);
         size_t data_left_in() { return strm.avail_in; };
         size_t data_left_out() {return strm.avail_out; };
 
