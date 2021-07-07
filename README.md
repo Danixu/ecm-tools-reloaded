@@ -27,7 +27,7 @@ By Daniel Carrasco (https://www.electrosoftcloud.com)
 
 # Changelog
 
-Changelog can be viewed in file [README.md](README.md)
+Changelog can be viewed in file [CHANGELOG.md](CHANGELOG.md)
 
 # To-Do
 
