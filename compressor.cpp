@@ -103,9 +103,11 @@ int8_t compressor::decompress(uint8_t* out, size_t out_size, size_t &in_size, ui
 int8_t compressor::close(){
     if (compression) {
         (void)deflateEnd(&strm);
+        strm = {};
     }
     else {
         (void)inflateEnd(&strm);
+        strm = {};
     }
     return 0;
 }

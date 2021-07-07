@@ -153,11 +153,14 @@ int main(int argc, char** argv) {
             // short option '-a', long option "--acompression"
             // Audio compression option
             case 'a':
-                /*
-                if (optarg == "wavpack") {
-                    audio_compression = C_AUDIO_WAVPACK;
+                if (strcmp("zlib", optarg) == 0) {
+                    audio_compression = C_DATA_ZLIB;
                 }
-                */
+                else {
+                    printf("Error: Unknown data compression mode: %s\n\n", optarg);
+                    print_help();
+                    return 1;
+                }
                 break;
 
             // short option '-d', long option '--dcompression'
@@ -640,43 +643,45 @@ static int8_t ecmify(
                 optimizations
             );
 
+            // Select the compression depending of the stream type and the user options
+            sector_tools_compression current_compression;
             if ((streams_toc[streams_toc_actual].type + 1) == STST_AUDIO) {
-                switch (audio_compression) {
-                case C_NONE:
-                    fwrite(out_sector, output_size, 1, out);
-                    break;
-                }
+                current_compression = audio_compression;
             }
             else {
-                switch (data_compression) {
-                // No compression
-                case C_NONE:
-                    fwrite(out_sector, output_size, 1, out);
-                    break;
-
-                // Zlib compression
-                case C_DATA_ZLIB:
-                    size_t compress_buffer_left = 0;
-                    // Current sector is the last stream sector
-                    if ((current_sector+1) == streams_toc[streams_toc_actual].end_sector) {
-                        compobj -> compress(compress_buffer_left, out_sector, output_size, Z_FINISH);
-                    }
-                    else if (seekable && (sectors_per_block == 1 || !((current_sector + 1) % sectors_per_block))) {
-                        // A new compressor block is required
-                        compobj -> compress(compress_buffer_left, out_sector, output_size, Z_FULL_FLUSH);
-                    }
-                    else {
-                        compobj -> compress(compress_buffer_left, out_sector, output_size, Z_NO_FLUSH);
-                    }
-
-                    // If buffer is above 75% or is the last sector, write the data to the output and reset the state
-                    if (compress_buffer_left < (buffer_size * 0.25) || (current_sector+1) == streams_toc[streams_toc_actual].end_sector) {
-                        fwrite(comp_buffer, buffer_size - compress_buffer_left, 1, out);
-                        compobj -> set_output(comp_buffer, buffer_size);
-                    }
-                    break;
-                }
+                current_compression = data_compression;
             }
+
+            // Compress the sector using the selected compression (or none)
+            switch (current_compression) {
+            // No compression
+            case C_NONE:
+                fwrite(out_sector, output_size, 1, out);
+                break;
+
+            // Zlib compression
+            case C_DATA_ZLIB:
+                size_t compress_buffer_left = 0;
+                // Current sector is the last stream sector
+                if ((current_sector+1) == streams_toc[streams_toc_actual].end_sector) {
+                    compobj -> compress(compress_buffer_left, out_sector, output_size, Z_FINISH);
+                }
+                else if (seekable && (sectors_per_block == 1 || !((current_sector + 1) % sectors_per_block))) {
+                    // A new compressor block is required
+                    compobj -> compress(compress_buffer_left, out_sector, output_size, Z_FULL_FLUSH);
+                }
+                else {
+                    compobj -> compress(compress_buffer_left, out_sector, output_size, Z_NO_FLUSH);
+                }
+
+                // If buffer is above 75% or is the last sector, write the data to the output and reset the state
+                if (compress_buffer_left < (buffer_size * 0.25) || (current_sector+1) == streams_toc[streams_toc_actual].end_sector) {
+                    fwrite(comp_buffer, buffer_size - compress_buffer_left, 1, out);
+                    compobj -> set_output(comp_buffer, buffer_size);
+                }
+                break;
+            }
+
             setcounter_encode(ftello(in));
             // If we are not in end of file, sum a sector
             if (ftello(in) != in_total_size) {
@@ -857,6 +862,9 @@ static int8_t unecmify(
 
         // If the next sector correspond to the next stream, advance to it
         if (current_sector == streams_toc[streams_toc_actual].end_sector) {
+            // New stream, new state. Reset the stream state
+            end_of_stream = false;
+            
             // No flush required as the last sector should have been read
             if (decompobj) {
                 decompobj -> close();
@@ -937,7 +945,7 @@ static int8_t unecmify(
                     // If available space is bigger than data in stream, read only the stream data
                     size_t stream_size = streams_toc[streams_toc_actual].out_end_position - ftello(in);
                     if (to_read > stream_size) {
-                        to_read = stream_size;
+                        to_read = stream_size;  
                         // If left data is less than buffer space, then end_of_stream is reached
                         end_of_stream = true;
                     }
