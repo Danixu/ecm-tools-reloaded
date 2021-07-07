@@ -27,15 +27,15 @@ By Daniel Carrasco (https://www.electrosoftcloud.com)
 
 # Changelog
 
-Changelog can be viewed in file [CHANGELOG.md](CHANGELOG.md)
+Changelog can be viewed in [CHANGELOG.md](CHANGELOG.md) file
 
 # To-Do
 
 * ~~Add the decode process~~
 * ~~Improve the sector mode detection, to detect all known CD-ROM/CDDA sectors~~
 * ~~Add buffered output to write in chunks and speed up the process~~
-* Try to use mmap instead manual buffers to see if works faster.
-* Add options to compress the stream directly instead to have to use external programs
-* Convert the program into a library to make it usable by another programs (for now is a class).
+* ~~Try to use mmap instead manual buffers to see if works faster.~~ Using FILE buffers.
+* ~~Add options to compress the stream directly instead to have to use external programs~~ For now zlib.
+* ~~Convert the program into a library to make it usable by another programs (for now is a class).~~ Doesn't worth. A class is enougth to be used in another programs.
 * Try to ~~detect and~~ compress CDDA tracks using FLAC, APE, or similar.
 * Verify that all CD-ROM modes are working (For now only CDDA, Mode 2 and Mode 2 XA 1 were tested)
