@@ -228,7 +228,7 @@ int main(int argc, char** argv) {
 
             case '?':
                 print_help();
-                return 1;
+                return 0;
                 break;
         }
     }
