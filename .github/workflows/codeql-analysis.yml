@@ -40,6 +40,10 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2
+    
+    # Install required packages
+    - name: Install Packages
+      run: apt-get update && apt-get install -y mingw-w64
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
