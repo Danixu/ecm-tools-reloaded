@@ -554,7 +554,7 @@ static HWND getconsolewindow(void) {
         //
         // Create a random temporary title
         //
-        sprintf(tempTitle, "%08lX", (unsigned long)(id));
+        sprintf(tempTitle, "%08lX", (unsigned long)id);
         srand(id + time(NULL));
         for(i = 8; i < sizeof(tempTitle) - 1; i++) {
             tempTitle[i] = 0x20 + (rand() % 95);

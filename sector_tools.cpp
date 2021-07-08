@@ -150,7 +150,7 @@ sector_tools_stream_types sector_tools::detect_stream(sector_tools_types type) {
 
 ////////////////////////////////////////////////////////////////////////////////
 // Detects if sectors are zeroed (GAP)
-bool sector_tools::is_gap(uint8_t *sector, uint32_t length) {
+bool sector_tools::is_gap(uint8_t *sector, uint16_t length) {
     for (uint16_t i = 0; i < length; i++) {
         if ((sector[i]) != 0x00) {
             return false; // Sector contains data, so is not a GAP

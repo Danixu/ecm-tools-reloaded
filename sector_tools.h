@@ -218,7 +218,7 @@ class sector_tools {
 
     private:
         // Private methods
-        bool is_gap(uint8_t *sector, uint32_t length);
+        bool is_gap(uint8_t *sector, uint16_t length);
         void eccedc_init(void);
         int8_t ecc_checkpq(
             const uint8_t* address,
