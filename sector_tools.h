@@ -260,5 +260,4 @@ class sector_tools {
         uint8_t  ecc_f_lut[256];
         uint8_t  ecc_b_lut[256];
         uint32_t edc_lut  [256];
-
 };

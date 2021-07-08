@@ -99,7 +99,6 @@ sector_tools_types sector_tools::detect(uint8_t* sector) {
             if(
                 edc_compute(0, sector + 0x010, 0x91C) == get32lsb(sector + 0x92C)
             ) {
-
                 if(is_gap(sector + 0x018, 0x914)) {
                     return STT_MODE2_2_GAP;
                 }
