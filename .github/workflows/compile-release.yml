@@ -21,8 +21,8 @@ jobs:
       - name: Generate release
         run: |
           cd release
-          zip -r ${{ env.RELEASE_VERSION }}_linux.zip linux/*
-          zip -r ${{ env.RELEASE_VERSION }}_win64.zip win64/*
+          zip -r ecm-tools-reloaded_${{ env.RELEASE_VERSION }}_linux.zip linux/*
+          zip -r ecm-tools-reloaded_${{ env.RELEASE_VERSION }}_win64.zip win64/*
       - name: Upload the release
         uses: skx/github-action-publish-binaries@release-1.3
         env:
