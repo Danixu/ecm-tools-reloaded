@@ -192,11 +192,97 @@ class sector_tools {
             uint32_t& count,
             uint8_t& readed_bytes
         );
+        // sector cleaner CDDA
+        static int8_t clean_sector_cdda(
+            uint8_t* out,
+            uint8_t* sector,
+            sector_tools_types type,
+            uint16_t& output_size,
+            optimization_options options
+        );
+        // sector cleaner Mode 1
+        static int8_t clean_sector_mode1(
+            uint8_t* out,
+            uint8_t* sector,
+            sector_tools_types type,
+            uint16_t& output_size,
+            optimization_options options
+        );
+        // sector cleaner Mode 2
+        static int8_t clean_sector_mode2(
+            uint8_t* out,
+            uint8_t* sector,
+            sector_tools_types type,
+            uint16_t& output_size,
+            optimization_options options
+        );
+        // sector cleaner Mode 2 XA 1
+        static int8_t clean_sector_mode2_xa1(
+            uint8_t* out,
+            uint8_t* sector,
+            sector_tools_types type,
+            uint16_t& output_size,
+            optimization_options options
+        );
+        // sector cleaner Mode 2 XA 1
+        static int8_t clean_sector_mode2_xa2(
+            uint8_t* out,
+            uint8_t* sector,
+            sector_tools_types type,
+            uint16_t& output_size,
+            optimization_options options
+        );
+        // sector cleaner switcher
         static int8_t clean_sector(
             uint8_t* out,
             uint8_t* sector,
             sector_tools_types type,
             uint16_t& output_size,
+            optimization_options options
+        );
+        // sector regenerator CDDA
+        int8_t regenerate_sector_cdda(
+            uint8_t* out,
+            uint8_t* sector,
+            sector_tools_types type,
+            uint16_t current_pos,
+            uint16_t& bytes_readed,
+            optimization_options options
+        );
+        //  sector regenerator Mode 1
+        int8_t regenerate_sector_mode1(
+            uint8_t* out,
+            uint8_t* sector,
+            sector_tools_types type,
+            uint16_t current_pos,
+            uint16_t& bytes_readed,
+            optimization_options options
+        );
+        //  sector regenerator Mode 2
+        int8_t regenerate_sector_mode2(
+            uint8_t* out,
+            uint8_t* sector,
+            sector_tools_types type,
+            uint16_t current_pos,
+            uint16_t& bytes_readed,
+            optimization_options options
+        );
+        //  sector regenerator Mode 2 XA 1
+        int8_t regenerate_sector_mode2_xa1(
+            uint8_t* out,
+            uint8_t* sector,
+            sector_tools_types type,
+            uint16_t current_pos,
+            uint16_t& bytes_readed,
+            optimization_options options
+        );
+        //  sector regenerator Mode 2 XA 2
+        int8_t regenerate_sector_mode2_xa2(
+            uint8_t* out,
+            uint8_t* sector,
+            sector_tools_types type,
+            uint16_t current_pos,
+            uint16_t& bytes_readed,
             optimization_options options
         );
         int8_t regenerate_sector(

@@ -491,6 +491,200 @@ void sector_tools::sector_to_time(
 //
 // Returns nonzero on error
 //
+// CDDA
+int8_t sector_tools::clean_sector_cdda(
+    uint8_t* out,
+    uint8_t* sector,
+    sector_tools_types type,
+    uint16_t& output_size,
+    optimization_options options
+) {
+    // CDDA are directly copied
+    if (type == STT_CDDA || !(options & OO_REMOVE_GAP)) {
+        memcpy(out, sector, 2352);
+        output_size = 2352;
+    }
+
+    return 0;
+}
+
+// Mode 1
+int8_t sector_tools::clean_sector_mode1(
+    uint8_t* out,
+    uint8_t* sector,
+    sector_tools_types type,
+    uint16_t& output_size,
+    optimization_options options
+) {
+    // SYNC bytes
+    if (!(options & OO_REMOVE_SYNC)) {
+        memcpy(out, sector, 0x0C);
+        output_size += 0x0C;
+    }
+    // Address bytes
+    if (!(options & OO_REMOVE_ADDR)) {
+        memcpy(out + output_size, sector + 0x0C, 0x03);
+        output_size += 0x03;
+    }
+    // Mode bytes
+    if (!(options & OO_REMOVE_MODE)) {
+        memcpy(out + output_size, sector + 0x0F, 0x01);
+        output_size += 0x01;
+    }
+    // Data bytes
+    if (type == STT_MODE1 || !(options & OO_REMOVE_GAP)) {
+        memcpy(out + output_size, sector + 0x10, 0x800);
+        output_size += 0x800;
+    }
+    // EDC bytes
+    if (!(options & OO_REMOVE_EDC)) {
+        memcpy(out + output_size, sector + 0x810, 0x04);
+        output_size += 0x04;
+    }
+    // Zeroed bytes
+    if (!(options & OO_REMOVE_BLANKS)) {
+        memcpy(out + output_size, sector + 0x814, 0x08);
+        output_size += 0x08;
+    }
+    // ECC bytes
+    if (!(options & OO_REMOVE_ECC)) {
+        memcpy(out + output_size, sector + 0x81C, 0x114);
+        output_size += 0x114;
+    }
+
+    return 0;
+}
+
+// Mode 2
+int8_t sector_tools::clean_sector_mode2(
+    uint8_t* out,
+    uint8_t* sector,
+    sector_tools_types type,
+    uint16_t& output_size,
+    optimization_options options
+) {
+    // SYNC bytes
+    if (!(options & OO_REMOVE_SYNC)) {
+        memcpy(out, sector, 0x0C);
+        output_size += 0x0C;
+    }
+    // Address bytes
+    if (!(options & OO_REMOVE_ADDR)) {
+        memcpy(out + output_size, sector + 0x0C, 0x03);
+        output_size += 0x03;
+    }
+    // Mode bytes
+    if (!(options & OO_REMOVE_MODE)) {
+        memcpy(out + output_size, sector + 0x0F, 0x01);
+        output_size += 0x01;
+    }
+    // Data bytes
+    if (type == STT_MODE2 || !(options & OO_REMOVE_GAP)) {
+        memcpy(out + output_size, sector + 0x10, 0x920);
+        output_size += 0x920;
+    }
+
+    return 0;
+}
+
+// Mode 2 XA 1
+int8_t sector_tools::clean_sector_mode2_xa1(
+    uint8_t* out,
+    uint8_t* sector,
+    sector_tools_types type,
+    uint16_t& output_size,
+    optimization_options options
+) {
+    // SYNC bytes
+    if (!(options & OO_REMOVE_SYNC)) {
+        memcpy(out, sector, 0x0C);
+        output_size += 0x0C;
+    }
+    // Address bytes
+    if (!(options & OO_REMOVE_ADDR)) {
+        memcpy(out + output_size, sector + 0x0C, 0x03);
+        output_size += 0x03;
+    }
+    // Mode bytes
+    if (!(options & OO_REMOVE_MODE)) {
+        memcpy(out + output_size, sector + 0x0F, 0x01);
+        output_size += 0x01;
+    }
+    // Flags bytes
+    if (!(options & OO_REMOVE_REDUNDANT_FLAG)) {
+        memcpy(out + output_size, sector + 0x10, 0x08);
+        output_size += 0x08;
+    }
+    else {
+        memcpy(out + output_size, sector + 0x10, 0x04);
+        output_size += 0x04;
+    }
+    // Data bytes
+    if (type == STT_MODE2_1 || !(options & OO_REMOVE_GAP)) {
+        memcpy(out + output_size, sector + 0x18, 0x800);
+        output_size += 0x800;
+    }
+    // EDC bytes
+    if (!(options & OO_REMOVE_EDC)) {
+        memcpy(out + output_size, sector + 0x818, 0x04);
+        output_size += 0x04;
+    }
+    // ECC bytes
+    if (!(options & OO_REMOVE_ECC)) {
+        memcpy(out + output_size, sector + 0x81C, 0x114);
+        output_size += 0x114;
+    }
+
+    return 0;
+}
+
+// Mode 2 XA 1
+int8_t sector_tools::clean_sector_mode2_xa2(
+    uint8_t* out,
+    uint8_t* sector,
+    sector_tools_types type,
+    uint16_t& output_size,
+    optimization_options options
+) {
+    // SYNC bytes
+    if (!(options & OO_REMOVE_SYNC)) {
+        memcpy(out, sector, 0x0C);
+        output_size += 0x0C;
+    }
+    // Address bytes
+    if (!(options & OO_REMOVE_ADDR)) {
+        memcpy(out + output_size, sector + 0x0C, 0x03);
+        output_size += 0x03;
+    }
+    // Mode bytes
+    if (!(options & OO_REMOVE_MODE)) {
+        memcpy(out + output_size, sector + 0x0F, 0x01);
+        output_size += 0x01;
+    }
+    // Flags bytes
+    if (!(options & OO_REMOVE_REDUNDANT_FLAG)) {
+        memcpy(out + output_size, sector + 0x10, 0x08);
+        output_size += 0x08;
+    }
+    else {
+        memcpy(out + output_size, sector + 0x10, 0x04);
+        output_size += 0x04;
+    }
+    // Data bytes
+    if (type == STT_MODE2_2 || !(options & OO_REMOVE_GAP)) {
+        memcpy(out + output_size, sector + 0x18, 0x914);
+        output_size += 0x914;
+    }
+    // EDC bytes
+    if (!(options & OO_REMOVE_EDC)) {
+        memcpy(out + output_size, sector + 0x92C, 0x04);
+        output_size += 0x04;
+    }
+
+    return 0;
+}
+
+// sector cleaner switcher
 int8_t sector_tools::clean_sector(
     uint8_t* out,
     uint8_t* sector,
@@ -502,155 +696,27 @@ int8_t sector_tools::clean_sector(
     switch(type) {
         case STT_CDDA:
         case STT_CDDA_GAP:
-            // CDDA are directly copied
-            if (type == STT_CDDA || !(options & OO_REMOVE_GAP)) {
-                memcpy(out, sector, 2352);
-                output_size = 2352;
-            }
+            return clean_sector_cdda(out, sector, type, output_size, options);
             break;
 
         case STT_MODE1:
         case STT_MODE1_GAP:
-            // SYNC bytes
-            if (!(options & OO_REMOVE_SYNC)) {
-                memcpy(out, sector, 0x0C);
-                output_size += 0x0C;
-            }
-            // Address bytes
-            if (!(options & OO_REMOVE_ADDR)) {
-                memcpy(out + output_size, sector + 0x0C, 0x03);
-                output_size += 0x03;
-            }
-            // Mode bytes
-            if (!(options & OO_REMOVE_MODE)) {
-                memcpy(out + output_size, sector + 0x0F, 0x01);
-                output_size += 0x01;
-            }
-            // Data bytes
-            if (type == STT_MODE1 || !(options & OO_REMOVE_GAP)) {
-                memcpy(out + output_size, sector + 0x10, 0x800);
-                output_size += 0x800;
-            }
-            // EDC bytes
-            if (!(options & OO_REMOVE_EDC)) {
-                memcpy(out + output_size, sector + 0x810, 0x04);
-                output_size += 0x04;
-            }
-            // Zeroed bytes
-            if (!(options & OO_REMOVE_BLANKS)) {
-                memcpy(out + output_size, sector + 0x814, 0x08);
-                output_size += 0x08;
-            }
-            // ECC bytes
-            if (!(options & OO_REMOVE_ECC)) {
-                memcpy(out + output_size, sector + 0x81C, 0x114);
-                output_size += 0x114;
-            }
+            return clean_sector_mode1(out, sector, type, output_size, options);
             break;
 
         case STT_MODE2:
         case STT_MODE2_GAP:
-            // SYNC bytes
-            if (!(options & OO_REMOVE_SYNC)) {
-                memcpy(out, sector, 0x0C);
-                output_size += 0x0C;
-            }
-            // Address bytes
-            if (!(options & OO_REMOVE_ADDR)) {
-                memcpy(out + output_size, sector + 0x0C, 0x03);
-                output_size += 0x03;
-            }
-            // Mode bytes
-            if (!(options & OO_REMOVE_MODE)) {
-                memcpy(out + output_size, sector + 0x0F, 0x01);
-                output_size += 0x01;
-            }
-            // Data bytes
-            if (type == STT_MODE2 || !(options & OO_REMOVE_GAP)) {
-                memcpy(out + output_size, sector + 0x10, 0x920);
-                output_size += 0x920;
-            }
+            return clean_sector_mode2(out, sector, type, output_size, options);
             break;
 
         case STT_MODE2_1:
         case STT_MODE2_1_GAP:
-            // SYNC bytes
-            if (!(options & OO_REMOVE_SYNC)) {
-                memcpy(out, sector, 0x0C);
-                output_size += 0x0C;
-            }
-            // Address bytes
-            if (!(options & OO_REMOVE_ADDR)) {
-                memcpy(out + output_size, sector + 0x0C, 0x03);
-                output_size += 0x03;
-            }
-            // Mode bytes
-            if (!(options & OO_REMOVE_MODE)) {
-                memcpy(out + output_size, sector + 0x0F, 0x01);
-                output_size += 0x01;
-            }
-            // Flags bytes
-            if (!(options & OO_REMOVE_REDUNDANT_FLAG)) {
-                memcpy(out + output_size, sector + 0x10, 0x08);
-                output_size += 0x08;
-            }
-            else {
-                memcpy(out + output_size, sector + 0x10, 0x04);
-                output_size += 0x04;
-            }
-            // Data bytes
-            if (type == STT_MODE2_1 || !(options & OO_REMOVE_GAP)) {
-                memcpy(out + output_size, sector + 0x18, 0x800);
-                output_size += 0x800;
-            }
-            // EDC bytes
-            if (!(options & OO_REMOVE_EDC)) {
-                memcpy(out + output_size, sector + 0x818, 0x04);
-                output_size += 0x04;
-            }
-            // ECC bytes
-            if (!(options & OO_REMOVE_ECC)) {
-                memcpy(out + output_size, sector + 0x81C, 0x114);
-                output_size += 0x114;
-            }
+            return clean_sector_mode2_xa1(out, sector, type, output_size, options);
             break;
 
         case STT_MODE2_2:
         case STT_MODE2_2_GAP:
-            // SYNC bytes
-            if (!(options & OO_REMOVE_SYNC)) {
-                memcpy(out, sector, 0x0C);
-                output_size += 0x0C;
-            }
-            // Address bytes
-            if (!(options & OO_REMOVE_ADDR)) {
-                memcpy(out + output_size, sector + 0x0C, 0x03);
-                output_size += 0x03;
-            }
-            // Mode bytes
-            if (!(options & OO_REMOVE_MODE)) {
-                memcpy(out + output_size, sector + 0x0F, 0x01);
-                output_size += 0x01;
-            }
-            // Flags bytes
-            if (!(options & OO_REMOVE_REDUNDANT_FLAG)) {
-                memcpy(out + output_size, sector + 0x10, 0x08);
-                output_size += 0x08;
-            }
-            else {
-                memcpy(out + output_size, sector + 0x10, 0x04);
-                output_size += 0x04;
-            }
-            // Data bytes
-            if (type == STT_MODE2_2 || !(options & OO_REMOVE_GAP)) {
-                memcpy(out + output_size, sector + 0x18, 0x914);
-                output_size += 0x914;
-            }
-            // EDC bytes
-            if (!(options & OO_REMOVE_EDC)) {
-                memcpy(out + output_size, sector + 0x92C, 0x04);
-                output_size += 0x04;
-            }
+            return clean_sector_mode2_xa2(out, sector, type, output_size, options);
             break;     
     }
 
@@ -664,6 +730,234 @@ int8_t sector_tools::clean_sector(
 //
 // Returns nonzero on error
 //
+// CDDA
+int8_t sector_tools::regenerate_sector_cdda(
+    uint8_t* out,
+    uint8_t* sector,
+    sector_tools_types type,
+    uint16_t current_pos,
+    uint16_t& bytes_readed,
+    optimization_options options
+) {
+    // CDDA are directly copied
+    if (type == STT_CDDA || !(options & OO_REMOVE_GAP)) {
+        memcpy(out, sector, 2352);
+        bytes_readed = 2352;
+    }
+    else {
+        memset(out, 0x00, 2352);
+    }
+
+    return 0;
+}
+
+// Mode 1
+int8_t sector_tools::regenerate_sector_mode1(
+    uint8_t* out,
+    uint8_t* sector,
+    sector_tools_types type,
+    uint16_t current_pos,
+    uint16_t& bytes_readed,
+    optimization_options options
+) {    
+    // Mode bytes
+    if (!(options & OO_REMOVE_MODE)) {
+        memcpy(out + current_pos, sector + bytes_readed, 0x01);
+        bytes_readed += 0x01;
+    }
+    else {
+        out[current_pos] = 0x01;
+    }
+    current_pos += 0x01;
+    // Data bytes
+    if (type == STT_MODE1 || !(options & OO_REMOVE_GAP)) {
+        memcpy(out + current_pos, sector + bytes_readed, 0x800);
+        bytes_readed += 0x800;
+    }
+    else {
+        memset(out + current_pos, 0x00, 0x800);
+    }
+    current_pos += 0x800;
+    // EDC bytes
+    if (!(options & OO_REMOVE_EDC)) {
+        memcpy(out + current_pos, sector + bytes_readed, 0x04);
+        bytes_readed += 0x04;
+    }
+    else {
+        put32lsb(out + current_pos, edc_compute(0, out     , 0x810));
+    }
+    current_pos += 0x04;
+    // Zeroed bytes
+    if (!(options & OO_REMOVE_BLANKS)) {
+        memcpy(out + current_pos, sector + bytes_readed, 0x08);
+        bytes_readed += 0x08;
+    }
+    else {
+        memset(out + current_pos, 0x00, 0x08);
+    }
+    current_pos += 0x08;
+    // ECC bytes
+    if (!(options & OO_REMOVE_ECC)) {
+        memcpy(out + current_pos, sector + bytes_readed, 0x114);
+        bytes_readed += 0x114;
+    }
+    else {
+        ecc_writesector(out + 0xC, out + 0x10, out + current_pos);
+    }
+    current_pos += 0x114;
+
+    return 0;
+}
+
+// Mode 2
+int8_t sector_tools::regenerate_sector_mode2(
+    uint8_t* out,
+    uint8_t* sector,
+    sector_tools_types type,
+    uint16_t current_pos,
+    uint16_t& bytes_readed,
+    optimization_options options
+) {
+    // Mode bytes
+    if (!(options & OO_REMOVE_MODE)) {
+        memcpy(out + current_pos, sector + bytes_readed, 0x01);
+        bytes_readed += 0x01;
+    }
+    else {
+        out[current_pos] = 0x02;
+    }
+    current_pos += 0x01;
+    // Data bytes
+    if (type == STT_MODE2 || !(options & OO_REMOVE_GAP)) {
+        memcpy(out + current_pos, sector + bytes_readed, 0x920);
+        bytes_readed += 0x920;
+    }
+    else {
+        memset(out + current_pos, 0x00, 0x920);
+    }
+    current_pos += 0x920;
+
+    return 0;
+}
+
+// Mode 2 XA 1
+int8_t sector_tools::regenerate_sector_mode2_xa1(
+    uint8_t* out,
+    uint8_t* sector,
+    sector_tools_types type,
+    uint16_t current_pos,
+    uint16_t& bytes_readed,
+    optimization_options options
+) {
+    // Mode bytes
+    if (!(options & OO_REMOVE_MODE)) {
+        memcpy(out + current_pos, sector + bytes_readed, 0x01);
+        bytes_readed += 0x01;
+    }
+    else {
+        out[current_pos] = 0x02;
+    }
+    current_pos += 0x01;
+    // Flags bytes
+    if (!(options & OO_REMOVE_REDUNDANT_FLAG)) {
+        memcpy(out + current_pos, sector + bytes_readed, 0x08);
+        bytes_readed += 0x08;
+    }
+    else {
+        memcpy(out + current_pos, sector + bytes_readed, 0x04);
+        bytes_readed += 0x04;
+        out[current_pos + 4] = out[current_pos];
+        out[current_pos + 5] = out[current_pos + 1];
+        out[current_pos + 6] = out[current_pos + 2];
+        out[current_pos + 7] = out[current_pos + 3];
+    }
+    current_pos += 0x08;
+    // Data bytes
+    if (type == STT_MODE2_1 || !(options & OO_REMOVE_GAP)) {
+        memcpy(out + current_pos, sector + bytes_readed, 0x800);
+        bytes_readed += 0x800;
+    }
+    else {
+        memset(out + current_pos, 0x00, 0x800);
+    }
+    current_pos += 0x800;
+    // EDC bytes
+    if (!(options & OO_REMOVE_EDC)) {
+        memcpy(out + current_pos, sector + bytes_readed, 0x04);
+        bytes_readed += 0x04;
+    }
+    else {
+        put32lsb(out + current_pos, edc_compute(0, out + 0x10, 0x808));
+    }
+    current_pos += 0x04;
+    // ECC bytes
+    if (!(options & OO_REMOVE_ECC)) {
+        memcpy(out + current_pos, sector + bytes_readed, 0x114);
+        bytes_readed += 0x114;
+    }
+    else {
+        ecc_writesector(zeroaddress, out + 0x10, out + current_pos);
+    }
+    current_pos += 0x114;
+
+    return 0;
+}
+
+// Mode 2 XA 2
+int8_t sector_tools::regenerate_sector_mode2_xa2(
+    uint8_t* out,
+    uint8_t* sector,
+    sector_tools_types type,
+    uint16_t current_pos,
+    uint16_t& bytes_readed,
+    optimization_options options
+) {
+    // Mode bytes
+    if (!(options & OO_REMOVE_MODE)) {
+        memcpy(out + current_pos, sector + bytes_readed, 0x01);
+        bytes_readed += 0x01;
+    }
+    else {
+        out[current_pos] = 0x02;
+    }
+    current_pos += 0x01;
+    // Flags bytes
+    if (!(options & OO_REMOVE_REDUNDANT_FLAG)) {
+        memcpy(out + current_pos, sector + bytes_readed, 0x08);
+        bytes_readed += 0x08;
+    }
+    else {
+        memcpy(out + current_pos, sector + bytes_readed, 0x04);
+        bytes_readed += 0x04;
+        out[current_pos + 4] = out[current_pos];
+        out[current_pos + 5] = out[current_pos + 1];
+        out[current_pos + 6] = out[current_pos + 2];
+        out[current_pos + 7] = out[current_pos + 3];
+    }
+    current_pos += 0x08;
+    // Data bytes
+    if (type == STT_MODE2_2 || !(options & OO_REMOVE_GAP)) {
+        memcpy(out + current_pos, sector + bytes_readed, 0x914);
+        bytes_readed += 0x914;
+    }
+    else {
+        memset(out + current_pos, 0x00, 0x914);
+    }
+    current_pos += 0x914;
+    // EDC bytes
+    if (!(options & OO_REMOVE_EDC)) {
+        memcpy(out + current_pos, sector + bytes_readed, 0x04);
+        bytes_readed += 0x04;
+    }
+    else {
+        put32lsb(out + current_pos, edc_compute(0, out + 0x10, 0x91C));
+    }
+    current_pos += 0x04;
+
+    return 0;
+}
+
+// regenerate_sector switcher
 int8_t sector_tools::regenerate_sector(
     uint8_t* out,
     uint8_t* sector,
@@ -674,223 +968,51 @@ int8_t sector_tools::regenerate_sector(
 ) {
     bytes_readed = 0;
     uint16_t current_pos = 0;
-    // sync and address bytes in data sectors
-    switch(type) {
-        case STT_MODE1:
-        case STT_MODE1_GAP:
-        case STT_MODE2:
-        case STT_MODE2_GAP:
-        case STT_MODE2_1:
-        case STT_MODE2_1_GAP:
-        case STT_MODE2_2:
-        case STT_MODE2_2_GAP:
-            // SYNC bytes
-            if (!(options & OO_REMOVE_SYNC)) {
-                memcpy(out, sector, 12);
-                bytes_readed += 0x0C;
-            }
-            else {
-                out[0] = 0x00;
-                memset(out + 1, 0xFF, 10);
-                out[11] = 0x00;
-            }
-            current_pos += 0x0C;
-            // Address bytes
-            if (!(options & OO_REMOVE_ADDR)) {
-                memcpy(out + current_pos, sector + bytes_readed, 0x03);
-                bytes_readed += 0x03;
-            }
-            else {
-                sector_to_time(out + current_pos, sector_number);
-            }
-            current_pos += 0x03;
-
-            break;
+    // sync and address bytes in data sectors, common to almost all types
+    if (type >= STT_MODE1) {
+        // SYNC bytes
+        if (!(options & OO_REMOVE_SYNC)) {
+            memcpy(out, sector, 12);
+            bytes_readed += 0x0C;
+        }
+        else {
+            out[0] = 0x00;
+            memset(out + 1, 0xFF, 10);
+            out[11] = 0x00;
+        }
+        current_pos += 0x0C;
+        // Address bytes
+        if (!(options & OO_REMOVE_ADDR)) {
+            memcpy(out + current_pos, sector + bytes_readed, 0x03);
+            bytes_readed += 0x03;
+        }
+        else {
+            sector_to_time(out + current_pos, sector_number);
+        }
+        current_pos += 0x03;
     }
 
     // The rest of the sector
     switch(type) {
         case STT_CDDA:
         case STT_CDDA_GAP:
-            // CDDA are directly copied
-            if (type == STT_CDDA || !(options & OO_REMOVE_GAP)) {
-                memcpy(out, sector, 2352);
-                bytes_readed = 2352;
-            }
-            else {
-                memset(out, 0x00, 2352);
-            }
-            break;
+            return regenerate_sector_cdda(out, sector, type, current_pos, bytes_readed, options);
 
         case STT_MODE1:
         case STT_MODE1_GAP:
-            // Mode bytes
-            if (!(options & OO_REMOVE_MODE)) {
-                memcpy(out + current_pos, sector + bytes_readed, 0x01);
-                bytes_readed += 0x01;
-            }
-            else {
-                out[current_pos] = 0x01;
-            }
-            current_pos += 0x01;
-            // Data bytes
-            if (type == STT_MODE1 || !(options & OO_REMOVE_GAP)) {
-                memcpy(out + current_pos, sector + bytes_readed, 0x800);
-                bytes_readed += 0x800;
-            }
-            else {
-                memset(out + current_pos, 0x00, 0x800);
-            }
-            current_pos += 0x800;
-            // EDC bytes
-            if (!(options & OO_REMOVE_EDC)) {
-                memcpy(out + current_pos, sector + bytes_readed, 0x04);
-                bytes_readed += 0x04;
-            }
-            else {
-                put32lsb(out + current_pos, edc_compute(0, out     , 0x810));
-            }
-            current_pos += 0x04;
-            // Zeroed bytes
-            if (!(options & OO_REMOVE_BLANKS)) {
-                memcpy(out + current_pos, sector + bytes_readed, 0x08);
-                bytes_readed += 0x08;
-            }
-            else {
-                memset(out + current_pos, 0x00, 0x08);
-            }
-            current_pos += 0x08;
-            // ECC bytes
-            if (!(options & OO_REMOVE_ECC)) {
-                memcpy(out + current_pos, sector + bytes_readed, 0x114);
-                bytes_readed += 0x114;
-            }
-            else {
-                ecc_writesector(out + 0xC, out + 0x10, out + current_pos);
-            }
-            current_pos += 0x114;
-            break;
+            return regenerate_sector_mode1(out, sector, type, current_pos, bytes_readed, options);
 
         case STT_MODE2:
         case STT_MODE2_GAP:
-            // Mode bytes
-            if (!(options & OO_REMOVE_MODE)) {
-                memcpy(out + current_pos, sector + bytes_readed, 0x01);
-                bytes_readed += 0x01;
-            }
-            else {
-                out[current_pos] = 0x02;
-            }
-            current_pos += 0x01;
-            // Data bytes
-            if (type == STT_MODE2 || !(options & OO_REMOVE_GAP)) {
-                memcpy(out + current_pos, sector + bytes_readed, 0x920);
-                bytes_readed += 0x920;
-            }
-            else {
-                memset(out + current_pos, 0x00, 0x920);
-            }
-            current_pos += 0x920;
-            break;
+            return regenerate_sector_mode2(out, sector, type, current_pos, bytes_readed, options);
 
         case STT_MODE2_1:
         case STT_MODE2_1_GAP:
-            // Mode bytes
-            if (!(options & OO_REMOVE_MODE)) {
-                memcpy(out + current_pos, sector + bytes_readed, 0x01);
-                bytes_readed += 0x01;
-            }
-            else {
-                out[current_pos] = 0x02;
-            }
-            current_pos += 0x01;
-            // Flags bytes
-            if (!(options & OO_REMOVE_REDUNDANT_FLAG)) {
-                memcpy(out + current_pos, sector + bytes_readed, 0x08);
-                bytes_readed += 0x08;
-            }
-            else {
-                memcpy(out + current_pos, sector + bytes_readed, 0x04);
-                bytes_readed += 0x04;
-                out[current_pos + 4] = out[current_pos];
-                out[current_pos + 5] = out[current_pos + 1];
-                out[current_pos + 6] = out[current_pos + 2];
-                out[current_pos + 7] = out[current_pos + 3];
-            }
-            current_pos += 0x08;
-            // Data bytes
-            if (type == STT_MODE2_1 || !(options & OO_REMOVE_GAP)) {
-                memcpy(out + current_pos, sector + bytes_readed, 0x800);
-                bytes_readed += 0x800;
-            }
-            else {
-                memset(out + current_pos, 0x00, 0x800);
-            }
-            current_pos += 0x800;
-            // EDC bytes
-            if (!(options & OO_REMOVE_EDC)) {
-                memcpy(out + current_pos, sector + bytes_readed, 0x04);
-                bytes_readed += 0x04;
-            }
-            else {
-                put32lsb(out + current_pos, edc_compute(0, out + 0x10, 0x808));
-            }
-            current_pos += 0x04;
-            // ECC bytes
-            if (!(options & OO_REMOVE_ECC)) {
-                memcpy(out + current_pos, sector + bytes_readed, 0x114);
-                bytes_readed += 0x114;
-            }
-            else {
-                ecc_writesector(zeroaddress, out + 0x10, out + current_pos);
-            }
-            current_pos += 0x114;
-            break;
+            return regenerate_sector_mode2_xa1(out, sector, type, current_pos, bytes_readed, options);
 
         case STT_MODE2_2:
         case STT_MODE2_2_GAP:
-            // Mode bytes
-            if (!(options & OO_REMOVE_MODE)) {
-                memcpy(out + current_pos, sector + bytes_readed, 0x01);
-                bytes_readed += 0x01;
-            }
-            else {
-                out[current_pos] = 0x02;
-            }
-            current_pos += 0x01;
-            // Flags bytes
-            if (!(options & OO_REMOVE_REDUNDANT_FLAG)) {
-                memcpy(out + current_pos, sector + bytes_readed, 0x08);
-                bytes_readed += 0x08;
-            }
-            else {
-                memcpy(out + current_pos, sector + bytes_readed, 0x04);
-                bytes_readed += 0x04;
-                out[current_pos + 4] = out[current_pos];
-                out[current_pos + 5] = out[current_pos + 1];
-                out[current_pos + 6] = out[current_pos + 2];
-                out[current_pos + 7] = out[current_pos + 3];
-            }
-            current_pos += 0x08;
-            // Data bytes
-            if (type == STT_MODE2_2 || !(options & OO_REMOVE_GAP)) {
-                memcpy(out + current_pos, sector + bytes_readed, 0x914);
-                bytes_readed += 0x914;
-            }
-            else {
-                memset(out + current_pos, 0x00, 0x914);
-            }
-            current_pos += 0x914;
-            // EDC bytes
-            if (!(options & OO_REMOVE_EDC)) {
-                memcpy(out + current_pos, sector + bytes_readed, 0x04);
-                bytes_readed += 0x04;
-            }
-            else {
-                put32lsb(out + current_pos, edc_compute(0, out + 0x10, 0x91C));
-            }
-            current_pos += 0x04;
-            break;
+            return regenerate_sector_mode2_xa2(out, sector, type, current_pos, bytes_readed, options);
     }
 
     return 0;
