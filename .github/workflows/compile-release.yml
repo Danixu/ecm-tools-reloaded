@@ -24,7 +24,7 @@ jobs:
           zip -r ecm-tools-reloaded_${{ env.RELEASE_VERSION }}_linux.zip linux/*
           zip -r ecm-tools-reloaded_${{ env.RELEASE_VERSION }}_win64.zip win64/*
       - name: Upload the release
-      - uses: "marvinpinto/action-automatic-releases@latest"
+        uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           prerelease: false
