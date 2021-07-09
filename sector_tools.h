@@ -207,6 +207,46 @@ class sector_tools {
             uint16_t& bytes_readed,
             optimization_options options
         );
+        int8_t regenerate_sector_cdda(
+            uint8_t* out,
+            uint8_t* sector,
+            sector_tools_types type,
+            uint16_t current_pos,
+            uint16_t& bytes_readed,
+            optimization_options options
+        );
+        int8_t regenerate_sector_mode1(
+            uint8_t* out,
+            uint8_t* sector,
+            sector_tools_types type,
+            uint16_t current_pos,
+            uint16_t& bytes_readed,
+            optimization_options options
+        );
+        int8_t regenerate_sector_mode2(
+            uint8_t* out,
+            uint8_t* sector,
+            sector_tools_types type,
+            uint16_t current_pos,
+            uint16_t& bytes_readed,
+            optimization_options options
+        );
+        int8_t regenerate_sector_mode2_xa1(
+            uint8_t* out,
+            uint8_t* sector,
+            sector_tools_types type,
+            uint16_t current_pos,
+            uint16_t& bytes_readed,
+            optimization_options options
+        );
+        int8_t regenerate_sector_mode2_xa2(
+            uint8_t* out,
+            uint8_t* sector,
+            sector_tools_types type,
+            uint16_t current_pos,
+            uint16_t& bytes_readed,
+            optimization_options options
+        );
         static int8_t encoded_sector_size(
             sector_tools_types type,
             uint16_t& output_size,
