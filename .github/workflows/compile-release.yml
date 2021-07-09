@@ -16,11 +16,13 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y mingw-w64 zip
       - name: make
         run: make
+      - name: Set env
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
       - name: Generate release
         run: |
           cd release
-          zip -r ${GITHUB_REF}_linux.zip linux/*
-          zip -r ${GITHUB_REF}_win64.zip win64/*
+          zip -r ${{ env.RELEASE_VERSION }}_linux.zip linux/*
+          zip -r ${{ env.RELEASE_VERSION }}_win64.zip win64/*
       - name: Upload the release
         uses: skx/github-action-publish-binaries@release-1.3
         env:
