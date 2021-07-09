@@ -1,9 +1,9 @@
 name: C/C++ CI
 
 on:
-  release:
-    types: # This configuration does not affect the page_build event above
-      - created
+  push:
+    tags:
+      - 'v*.*.*'
 
 jobs:
   build:
