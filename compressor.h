@@ -6,13 +6,12 @@
 //
 enum sector_tools_compression : uint8_t {
     C_NONE = 0,
-    C_AUDIO_FLAC,
-    C_AUDIO_APE,
-    C_AUDIO_WAVPACK,
-    C_DATA_ZLIB = 1,
-    C_DATA_LZMA,
-    C_DATA_BZ2,
-    C_DATA_LZ4
+    C_ZLIB,
+    C_LZMA,
+    C_LZ4,
+    C_FLAC,
+    C_APE,
+    C_WAVPACK,
 };
     
 //

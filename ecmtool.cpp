@@ -154,7 +154,7 @@ int main(int argc, char** argv) {
             // Audio compression option
             case 'a':
                 if (strcmp("zlib", optarg) == 0) {
-                    audio_compression = C_DATA_ZLIB;
+                    audio_compression = C_ZLIB;
                 }
                 else {
                     printf("Error: Unknown data compression mode: %s\n\n", optarg);
@@ -167,7 +167,7 @@ int main(int argc, char** argv) {
             // Data compression option
             case 'd':
                 if (strcmp("zlib", optarg) == 0) {
-                    data_compression = C_DATA_ZLIB;
+                    data_compression = C_ZLIB;
                 }
                 else {
                     printf("Error: Unknown data compression mode: %s\n\n", optarg);
@@ -390,7 +390,7 @@ static int8_t ecmify(
     }
     // Allocate compressor buffer if required
     uint8_t* comp_buffer = NULL;
-    if (data_compression == C_DATA_ZLIB) {
+    if (data_compression || audio_compression) {
         comp_buffer = (uint8_t*) malloc(buffer_size);
         if(!comp_buffer) {
             printf("Out of memory\n");
@@ -611,9 +611,23 @@ static int8_t ecmify(
             streams_toc_actual++;
         }
 
-        if (data_compression && !compobj) {
-            compobj = new compressor(data_compression, true, compression_level);
+        if (streams_toc[streams_toc_actual].compression && !compobj) {
+            printf("\nCompressing stream %d: %d\n", streams_toc_actual, streams_toc[streams_toc_actual].compression);
+            compobj = new compressor(
+                (sector_tools_compression)streams_toc[streams_toc_actual].compression,
+                true,
+                compression_level
+            );
             compobj -> set_output(comp_buffer, buffer_size);
+        }
+
+        // Select the compression depending of the stream type and the user options
+        sector_tools_compression current_compression;
+        if ((streams_toc[streams_toc_actual].type + 1) == STST_AUDIO) {
+            current_compression = audio_compression;
+        }
+        else {
+            current_compression = data_compression;
         }
 
         // Process the sectors count indicated in the toc
@@ -643,15 +657,6 @@ static int8_t ecmify(
                 optimizations
             );
 
-            // Select the compression depending of the stream type and the user options
-            sector_tools_compression current_compression;
-            if ((streams_toc[streams_toc_actual].type + 1) == STST_AUDIO) {
-                current_compression = audio_compression;
-            }
-            else {
-                current_compression = data_compression;
-            }
-
             // Compress the sector using the selected compression (or none)
             switch (current_compression) {
             // No compression
@@ -660,7 +665,7 @@ static int8_t ecmify(
                 break;
 
             // Zlib compression
-            case C_DATA_ZLIB:
+            case C_ZLIB:
                 size_t compress_buffer_left = 0;
                 // Current sector is the last stream sector
                 if ((current_sector+1) == streams_toc[streams_toc_actual].end_sector) {
@@ -929,7 +934,7 @@ static int8_t unecmify(
                 break;
 
             // Zlib compression
-            case C_DATA_ZLIB:
+            case C_ZLIB:
                 // Decompress the sector data
                 decompobj -> decompress(in_sector, bytes_to_read, decompress_buffer_left, Z_SYNC_FLUSH);
 

@@ -5,7 +5,7 @@ compressor::compressor(sector_tools_compression mode, bool is_compression, int8_
     comp_mode = mode;
     compression = is_compression;
     // Class initialzer
-    if (mode == C_DATA_ZLIB) {
+    if (mode == C_ZLIB) {
         strm.zalloc = Z_NULL;
         strm.zfree = Z_NULL;
         strm.opaque = Z_NULL;
@@ -27,7 +27,7 @@ compressor::compressor(sector_tools_compression mode, bool is_compression, int8_
 
 int8_t compressor::set_input(uint8_t* in, size_t &in_size){
     if (!compression) {
-        if (comp_mode == C_DATA_ZLIB) {
+        if (comp_mode == C_ZLIB) {
             strm.avail_in = in_size;
             strm.next_in = in;
 
@@ -45,7 +45,7 @@ int8_t compressor::set_input(uint8_t* in, size_t &in_size){
 
 int8_t compressor::set_output(uint8_t* out, size_t &out_size){
     if (compression) {
-        if (comp_mode == C_DATA_ZLIB) {
+        if (comp_mode == C_ZLIB) {
             strm.avail_out = out_size;
             strm.next_out = out;
 
@@ -63,7 +63,7 @@ int8_t compressor::set_output(uint8_t* out, size_t &out_size){
 
 int8_t compressor::compress(size_t &out_size, uint8_t* in, size_t in_size, uint8_t flusmode){
     if (compression) {
-        if (comp_mode == C_DATA_ZLIB) {
+        if (comp_mode == C_ZLIB) {
             strm.avail_in = in_size;
             strm.next_in = in;
 
@@ -83,7 +83,7 @@ int8_t compressor::compress(size_t &out_size, uint8_t* in, size_t in_size, uint8
 
 int8_t compressor::decompress(uint8_t* out, size_t out_size, size_t &in_size, uint8_t flusmode){
     if (!compression) {
-        if (comp_mode == C_DATA_ZLIB) {
+        if (comp_mode == C_ZLIB) {
             strm.avail_out = out_size;
             strm.next_out = out;
             int8_t return_code = inflate(&strm, flusmode);
