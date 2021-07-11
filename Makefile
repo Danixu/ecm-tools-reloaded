@@ -1,3 +1,5 @@
+COMP_OPT=-O2 -ffunction-sections -Wl,-gc-sections -s -Izlib -Lzlib
+
 all: ecmtool ecmtool.exe
 
 ecmtool:
@@ -10,7 +12,7 @@ ecmtool:
 
 	# Compile the Linux release
 	mkdir -p release/linux
-	g++ -o release/linux/$@ ecmtool.cpp compressor.cpp sector_tools.cpp -Lzlib -lzlinux -Izlib
+	g++ ${COMP_OPT} -o release/linux/$@ ecmtool.cpp compressor.cpp sector_tools.cpp -lzlinux
 
 	# Clean the zlib directory at end
 	make -C zlib -f Makefile.linux clean
@@ -26,7 +28,7 @@ ecmtool.exe:
 
 	# Compile the Win64 release
 	mkdir -p release/win64
-	x86_64-w64-mingw32-g++ -O2 -ffunction-sections -Wl,-gc-sections -static-libstdc++ -s -o release/win64/$@ ecmtool.cpp compressor.cpp sector_tools.cpp -Izlib zlib/libzwindows.a
+	x86_64-w64-mingw32-g++ ${COMP_OPT} -o release/win64/$@ ecmtool.cpp compressor.cpp sector_tools.cpp -lzwindows
 
 	# Clean the zlib directory at end
 	make -C zlib -f Makefile.win clean
