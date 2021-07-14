@@ -1,5 +1,9 @@
 # Changelog
 
+### 20210714
+
+* Added lzma compression to data and audio streams
+
 ### 20210707
 
 * Added zlib compression to audio stream

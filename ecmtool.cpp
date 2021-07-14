@@ -156,6 +156,9 @@ int main(int argc, char** argv) {
                 if (strcmp("zlib", optarg) == 0) {
                     audio_compression = C_ZLIB;
                 }
+                else if (strcmp("lzma", optarg) == 0) {
+                    audio_compression = C_LZMA;
+                }
                 else {
                     printf("Error: Unknown data compression mode: %s\n\n", optarg);
                     print_help();
@@ -168,6 +171,9 @@ int main(int argc, char** argv) {
             case 'd':
                 if (strcmp("zlib", optarg) == 0) {
                     data_compression = C_ZLIB;
+                }
+                else if (strcmp("lzma", optarg) == 0) {
+                    data_compression = C_LZMA;
                 }
                 else {
                     printf("Error: Unknown data compression mode: %s\n\n", optarg);
@@ -612,7 +618,6 @@ static int8_t ecmify(
         }
 
         if (streams_toc[streams_toc_actual].compression && !compobj) {
-            printf("\nCompressing stream %d: %d\n", streams_toc_actual, streams_toc[streams_toc_actual].compression);
             compobj = new compressor(
                 (sector_tools_compression)streams_toc[streams_toc_actual].compression,
                 true,
@@ -666,6 +671,7 @@ static int8_t ecmify(
 
             // Zlib compression
             case C_ZLIB:
+            case C_LZMA:
                 size_t compress_buffer_left = 0;
                 // Current sector is the last stream sector
                 if ((current_sector+1) == streams_toc[streams_toc_actual].end_sector) {
@@ -935,6 +941,7 @@ static int8_t unecmify(
 
             // Zlib compression
             case C_ZLIB:
+            case C_LZMA:
                 // Decompress the sector data
                 decompobj -> decompress(in_sector, bytes_to_read, decompress_buffer_left, Z_SYNC_FLUSH);
 
