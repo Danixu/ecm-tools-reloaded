@@ -13,7 +13,7 @@ pipelines:
           - step:
               name: Build and generate zip files
               script:
-              - apt-get update && apt-get install -y mingw-w64 zip  libtool autopoint automake
+              - apt-get update && apt-get install -y mingw-w64 zip libtool autopoint automake
               - git submodule update --init
               - make
               - cd release
