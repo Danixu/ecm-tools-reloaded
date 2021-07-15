@@ -24,8 +24,8 @@
 #include "common.h"
 #include "banner.h"
 #include "sector_tools.h"
-#include "getopt.h"
-#include "stdbool.h"
+#include <getopt.h>
+#include <stdbool.h>
 #include <string>
 #include <stdexcept>
 #include "zlib.h"
@@ -62,6 +62,7 @@ static int8_t ecmify(
     sector_tools_compression data_compression,
     sector_tools_compression audio_compression,
     uint8_t compression_level,
+    bool extreme_compression,
     bool seekable,
     uint8_t sectors_per_block
 );
@@ -108,6 +109,7 @@ static struct option long_options[] = {
     {"acompression", required_argument, NULL, 'a'},
     {"dcompression", required_argument, NULL, 'd'},
     {"clevel", required_argument, NULL, 'c'},
+    {"extreme-compression", no_argument, NULL, 'e'},
     {"seekable", no_argument, NULL, 's'},
     {"sectors_per_block", required_argument, NULL, 'p'},
     {"force", required_argument, NULL, 'f'},
@@ -122,6 +124,7 @@ int main(int argc, char** argv) {
     sector_tools_compression audio_compression = C_NONE;
     sector_tools_compression data_compression = C_NONE;
     uint8_t compression_level = 5;
+    bool extreme_compression = false;
     bool force_rewrite = false;
     // ZLIB will be seekable
     bool seekable = false;
@@ -135,7 +138,7 @@ int main(int argc, char** argv) {
     const char *errstr;
 
     char ch;
-    while ((ch = getopt_long(argc, argv, "i:o:a:d:c:sp:f", long_options, NULL)) != -1)
+    while ((ch = getopt_long(argc, argv, "i:o:a:d:c:esp:f", long_options, NULL)) != -1)
     {
         // check to see if a single character or long option came through
         switch (ch)
@@ -156,6 +159,9 @@ int main(int argc, char** argv) {
                 if (strcmp("zlib", optarg) == 0) {
                     audio_compression = C_ZLIB;
                 }
+                else if (strcmp("lzma", optarg) == 0) {
+                    audio_compression = C_LZMA;
+                }
                 else {
                     printf("Error: Unknown data compression mode: %s\n\n", optarg);
                     print_help();
@@ -168,6 +174,9 @@ int main(int argc, char** argv) {
             case 'd':
                 if (strcmp("zlib", optarg) == 0) {
                     data_compression = C_ZLIB;
+                }
+                else if (strcmp("lzma", optarg) == 0) {
+                    data_compression = C_LZMA;
                 }
                 else {
                     printf("Error: Unknown data compression mode: %s\n\n", optarg);
@@ -196,6 +205,11 @@ int main(int argc, char** argv) {
                     return 1;
                 }
 
+                break;
+
+            // short option '-e', long option "--extreme-compresison" (only LZMA)
+            case 'e':
+                extreme_compression = true;
                 break;
 
              // short option '-s', long option "--seekable"
@@ -324,6 +338,7 @@ int main(int argc, char** argv) {
             data_compression,
             audio_compression,
             compression_level,
+            extreme_compression,
             seekable,
             sectors_per_block
         );
@@ -338,6 +353,7 @@ static int8_t ecmify(
     sector_tools_compression data_compression,
     sector_tools_compression audio_compression,
     uint8_t compression_level,
+    bool extreme_compression,
     bool seekable,
     uint8_t sectors_per_block
 ) {
@@ -612,11 +628,17 @@ static int8_t ecmify(
         }
 
         if (streams_toc[streams_toc_actual].compression && !compobj) {
-            printf("\nCompressing stream %d: %d\n", streams_toc_actual, streams_toc[streams_toc_actual].compression);
+            int32_t compression_option = compression_level;
+            if (
+                (sector_tools_compression)streams_toc[streams_toc_actual].compression == C_LZMA &&
+                extreme_compression    
+            ) {
+                compression_option |= LZMA_PRESET_EXTREME;
+            }
             compobj = new compressor(
                 (sector_tools_compression)streams_toc[streams_toc_actual].compression,
                 true,
-                compression_level
+                compression_option
             );
             compobj -> set_output(comp_buffer, buffer_size);
         }
@@ -647,9 +669,10 @@ static int8_t ecmify(
                 2352
             );
 
+            int8_t res;
             // We will clean the sector to keep only the data that we want
             uint16_t output_size = 0;
-            sTools.clean_sector(
+            res = sTools.clean_sector(
                 out_sector,
                 in_sector,
                 (sector_tools_types)sectors_toc[sectors_toc_actual].mode,
@@ -657,31 +680,48 @@ static int8_t ecmify(
                 optimizations
             );
 
+            if (res) {
+                printf("\nThere was an error cleaning the sector\n");
+                return_code = 1;
+                break;
+            }
+
             // Compress the sector using the selected compression (or none)
             switch (current_compression) {
             // No compression
             case C_NONE:
                 fwrite(out_sector, output_size, 1, out);
+                if (ferror(out)) {
+                    printf("\nThere was an error writting the output file");
+                    return_code = 1;
+                    break;
+                }
                 break;
 
             // Zlib compression
             case C_ZLIB:
+            case C_LZMA:
                 size_t compress_buffer_left = 0;
                 // Current sector is the last stream sector
                 if ((current_sector+1) == streams_toc[streams_toc_actual].end_sector) {
-                    compobj -> compress(compress_buffer_left, out_sector, output_size, Z_FINISH);
+                    res = compobj -> compress(compress_buffer_left, out_sector, output_size, Z_FINISH);
                 }
                 else if (seekable && (sectors_per_block == 1 || !((current_sector + 1) % sectors_per_block))) {
                     // A new compressor block is required
-                    compobj -> compress(compress_buffer_left, out_sector, output_size, Z_FULL_FLUSH);
+                    res = compobj -> compress(compress_buffer_left, out_sector, output_size, Z_FULL_FLUSH);
                 }
                 else {
-                    compobj -> compress(compress_buffer_left, out_sector, output_size, Z_NO_FLUSH);
+                    res = compobj -> compress(compress_buffer_left, out_sector, output_size, Z_NO_FLUSH);
                 }
 
                 // If buffer is above 75% or is the last sector, write the data to the output and reset the state
                 if (compress_buffer_left < (buffer_size * 0.25) || (current_sector+1) == streams_toc[streams_toc_actual].end_sector) {
                     fwrite(comp_buffer, buffer_size - compress_buffer_left, 1, out);
+                    if (ferror(out)) {
+                    printf("\nThere was an error writting the output file");
+                    return_code = 1;
+                    break;
+                }
                     compobj -> set_output(comp_buffer, buffer_size);
                 }
                 break;
@@ -935,6 +975,7 @@ static int8_t unecmify(
 
             // Zlib compression
             case C_ZLIB:
+            case C_LZMA:
                 // Decompress the sector data
                 decompobj -> decompress(in_sector, bytes_to_read, decompress_buffer_left, Z_SYNC_FLUSH);
 
@@ -1015,7 +1056,6 @@ static int8_t unecmify(
     return return_code;
 }
 
-
 void print_help() {
     banner();
     printf(
@@ -1030,10 +1070,14 @@ void print_help() {
         "    ecmtool -i/--input ecmfile -o/--output cdimagefile\n"
         "\n"
         "Optional options:\n"
-        "    -d/--dcompression <zlib>\n"
+        "    -a/--acompression <zlib/lzma>\n"
+        "           Enable audio compression\n"
+        "    -d/--dcompression <zlib/lzma>\n"
         "           Enable data compression\n"
         "    -c/--clevel <0-9>\n"
-        "           Compression level between 0 and 9"
+        "           Compression level between 0 and 9\n"
+        "    -e/--extreme-compression\n"
+        "           Enables extreme compression mode for LZMA (very slow)\n"
         "    -s/--seekable\n"
         "           Create a seekable file. Reduce the compression ratio but\n"
         "           but allow to seek into the stream.\n"
