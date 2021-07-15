@@ -1,5 +1,10 @@
 # Changelog
 
+### 20210715
+
+* Updated documentation
+* Fixed compresison level for LZMA compressor
+
 ### 20210714
 
 * Added lzma compression to data and audio streams
