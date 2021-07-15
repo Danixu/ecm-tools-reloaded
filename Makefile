@@ -13,7 +13,7 @@ ecmtool:
 	########## END ZLIB MAKE ##########
 
 	########## LZMA (XZ) MAKE ##########
-	cd xz && bash autogen.sh --no-po4a && ./configure --enable-static --disable-xz --disable-xzdec --disable-lzmainfo --disable-scripts --disable-lzmadec --disable-shared
+	cd xz && bash autogen.sh --no-po4a && ./configure --enable-static --disable-xz --disable-xzdec --disable-lzmainfo --disable-lzma-links --disable-scripts --disable-doc --disable-lzmadec --disable-shared
 	make -C xz -j$(nproc)
 	########## LZMA (XZ) MAKE ##########
 
@@ -42,7 +42,7 @@ ecmtool.exe:
 	########## END ZLIB MAKE ##########
 
 	########## LZMA (XZ) MAKE ##########
-	cd xz && bash autogen.sh --no-po4a && CC=x86_64-w64-mingw32-gcc ./configure --host=x64-windows --target=x64-windows --enable-static --disable-xz --disable-xzdec --disable-lzmainfo --disable-scripts --disable-lzmadec --disable-shared --enable-threads=vista
+	cd xz && bash autogen.sh --no-po4a && CC=x86_64-w64-mingw32-gcc ./configure --host=x64-windows --target=x64-windows --enable-static --disable-xz --disable-xzdec --disable-lzmainfo --disable-lzma-links --disable-doc --disable-scripts --disable-lzmadec --disable-shared --enable-threads=vista
 	make -C xz -j$(nproc)
 	########## LZMA (XZ) MAKE ##########
 
