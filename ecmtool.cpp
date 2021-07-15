@@ -1058,7 +1058,7 @@ void print_help() {
         "    -d/--dcompression <zlib/lzma>\n"
         "           Enable data compression\n"
         "    -c/--clevel <0-9>\n"
-        "           Compression level between 0 and 9"
+        "           Compression level between 0 and 9\n"
         "    -e/--extreme-compression\n"
         "           Enables extreme compression mode for LZMA (very slow)\n"
         "    -s/--seekable\n"
