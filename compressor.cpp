@@ -1,7 +1,7 @@
 #include <stdexcept>
 #include "compressor.h"
 
-compressor::compressor(sector_tools_compression mode, bool is_compression, int8_t comp_level) {
+compressor::compressor(sector_tools_compression mode, bool is_compression, int32_t comp_level) {
     comp_mode = mode;
     compression = is_compression;
     int ret;
@@ -29,7 +29,7 @@ compressor::compressor(sector_tools_compression mode, bool is_compression, int8_
         strm_lzma = LZMA_STREAM_INIT;
 
         if (is_compression) {
-            lzma_lzma_preset(&opt_lzma2, 9);
+            lzma_lzma_preset(&opt_lzma2, comp_level);
 
             lzma_filter filters[] = {
                 { LZMA_FILTER_X86, NULL },
@@ -146,6 +146,10 @@ int8_t compressor::compress(size_t &out_size, uint8_t* in, size_t in_size, uint8
             }
 
             return_code = lzma_code(&strm_lzma, flushmode_lzma);
+            
+            if (return_code != LZMA_STREAM_END) {
+
+            }
 
             out_size = strm_lzma.avail_out;
             return return_code;

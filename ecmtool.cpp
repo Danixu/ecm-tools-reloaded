@@ -628,7 +628,7 @@ static int8_t ecmify(
         }
 
         if (streams_toc[streams_toc_actual].compression && !compobj) {
-            uint8_t compression_option = compression_level;
+            int32_t compression_option = compression_level;
             if (
                 (sector_tools_compression)streams_toc[streams_toc_actual].compression == C_LZMA &&
                 extreme_compression    
@@ -669,9 +669,10 @@ static int8_t ecmify(
                 2352
             );
 
+            int8_t res;
             // We will clean the sector to keep only the data that we want
             uint16_t output_size = 0;
-            sTools.clean_sector(
+            res = sTools.clean_sector(
                 out_sector,
                 in_sector,
                 (sector_tools_types)sectors_toc[sectors_toc_actual].mode,
@@ -679,11 +680,22 @@ static int8_t ecmify(
                 optimizations
             );
 
+            if (res) {
+                printf("\nThere was an error cleaning the sector\n");
+                return_code = 1;
+                break;
+            }
+
             // Compress the sector using the selected compression (or none)
             switch (current_compression) {
             // No compression
             case C_NONE:
                 fwrite(out_sector, output_size, 1, out);
+                if (ferror(out)) {
+                    printf("\nThere was an error writting the output file");
+                    return_code = 1;
+                    break;
+                }
                 break;
 
             // Zlib compression
@@ -692,19 +704,24 @@ static int8_t ecmify(
                 size_t compress_buffer_left = 0;
                 // Current sector is the last stream sector
                 if ((current_sector+1) == streams_toc[streams_toc_actual].end_sector) {
-                    compobj -> compress(compress_buffer_left, out_sector, output_size, Z_FINISH);
+                    res = compobj -> compress(compress_buffer_left, out_sector, output_size, Z_FINISH);
                 }
                 else if (seekable && (sectors_per_block == 1 || !((current_sector + 1) % sectors_per_block))) {
                     // A new compressor block is required
-                    compobj -> compress(compress_buffer_left, out_sector, output_size, Z_FULL_FLUSH);
+                    res = compobj -> compress(compress_buffer_left, out_sector, output_size, Z_FULL_FLUSH);
                 }
                 else {
-                    compobj -> compress(compress_buffer_left, out_sector, output_size, Z_NO_FLUSH);
+                    res = compobj -> compress(compress_buffer_left, out_sector, output_size, Z_NO_FLUSH);
                 }
 
                 // If buffer is above 75% or is the last sector, write the data to the output and reset the state
                 if (compress_buffer_left < (buffer_size * 0.25) || (current_sector+1) == streams_toc[streams_toc_actual].end_sector) {
                     fwrite(comp_buffer, buffer_size - compress_buffer_left, 1, out);
+                    if (ferror(out)) {
+                    printf("\nThere was an error writting the output file");
+                    return_code = 1;
+                    break;
+                }
                     compobj -> set_output(comp_buffer, buffer_size);
                 }
                 break;
