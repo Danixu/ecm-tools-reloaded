@@ -3,7 +3,7 @@
 void banner(void) {
     printf(TITLE "\n"
         "  " COPYR "\n"
-        "Reloaded version 2.1.0a"
+        "Reloaded version 2.1.1a"
         " (%d-bit "
 
 #if defined(__CYGWIN__)

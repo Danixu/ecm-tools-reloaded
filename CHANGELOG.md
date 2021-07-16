@@ -1,5 +1,9 @@
 # Changelog
 
+### 20210716
+
+* Added encoding summary
+
 ### 20210715
 
 * Updated documentation

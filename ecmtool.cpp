@@ -33,6 +33,9 @@
 // Configurations
 #define SECTORS_PER_BLOCK 100
 
+// MB Macro
+#define MB(x) ((float)(x) / 1024 / 1024)
+
 // Streams and sectors structs
 #pragma pack(push, 1)
 struct STREAM {
@@ -90,6 +93,13 @@ static void decode_progress(void);
 static void setcounter_analyze(off_t n);
 static void setcounter_encode(off_t n);
 static void setcounter_decode(off_t n);
+
+static void summary(
+    uint32_t * sectors,
+    optimization_options optimizations,
+    sector_tools sTools,
+    size_t compressed_size
+);
 
 // Some necessary variables
 static off_t mycounter_analyze = (off_t)-1;
@@ -609,6 +619,7 @@ static int8_t ecmify(
     // Starting the processing part
     //
     uint32_t streams_toc_actual = 0;
+    uint32_t sectors_type[11] = {};
     // Loop through every sector type in toc
     for (uint32_t sectors_toc_actual = 0; sectors_toc_actual < sectors_toc_count.count; sectors_toc_actual++) {
         if (return_code) { break; } // If there was an error, break the loop
@@ -686,6 +697,8 @@ static int8_t ecmify(
                 break;
             }
 
+            sectors_type[sectors_toc[sectors_toc_actual].mode] += 1;
+
             // Compress the sector using the selected compression (or none)
             switch (current_compression) {
             // No compression
@@ -759,6 +772,10 @@ static int8_t ecmify(
         return_code = 1;
     }
 
+    fseeko(out, 0, SEEK_END);
+    summary(sectors_type, optimizations, sTools, ftello(out));
+
+    //sTools.close();
     fclose(in);
     fflush(out);
     fclose(out);
@@ -1086,6 +1103,62 @@ void print_help() {
         "    -f/--force\n"
         "           Force to ovewrite the output file\n"
     );
+}
+
+
+static void summary(uint32_t * sectors, optimization_options optimizations, sector_tools sTools, size_t compressed_size) {
+    uint16_t optimized_sector_sizes[11];
+
+    // Calculate the size per sector type
+    for (uint8_t i = 1; i < 11; i++) {
+        uint16_t bytes_to_read = 0;
+        // Getting the sector size prior to read, to read the real sector size and avoid to fseek every time
+        sTools.encoded_sector_size(
+            (sector_tools_types)i,
+            bytes_to_read,
+            optimizations
+        );
+        optimized_sector_sizes[i] = bytes_to_read;
+    }
+
+    // Total sectors
+    uint32_t total_sectors = 0;
+    for (uint8_t i = 1; i < 11; i++) {
+        total_sectors += sectors[i];
+    }
+
+    // Total size
+    size_t total_size = total_sectors * 2352;
+
+    // ECM size without compression
+    size_t ecm_size = 0;
+    for (uint8_t i = 1; i < 11; i++) {
+        ecm_size += sectors[i] * optimized_sector_sizes[i];
+    }
+
+    printf("\n\n");
+    printf(" Type               Sectors         In Size        Out Size\n");
+    printf("------------------------------------------------------------\n");
+    printf("CDDA ............... %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[1], MB(sectors[1] * 2352), MB(sectors[1] * optimized_sector_sizes[1])); 
+    printf("CDDA Gap ........... %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[2], MB(sectors[2] * 2352), MB(sectors[2] * optimized_sector_sizes[2]));
+    printf("Mode 1 ............. %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[3], MB(sectors[3] * 2352), MB(sectors[3] * optimized_sector_sizes[3]));
+    printf("Mode 1 Gap ......... %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[4], MB(sectors[4] * 2352), MB(sectors[4] * optimized_sector_sizes[4]));
+    printf("Mode 2 ............. %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[5], MB(sectors[5] * 2352), MB(sectors[5] * optimized_sector_sizes[5]));
+    printf("Mode 2 Gap ......... %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[6], MB(sectors[6] * 2352), MB(sectors[6] * optimized_sector_sizes[6]));
+    printf("Mode 2 XA1 ......... %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[7], MB(sectors[7] * 2352), MB(sectors[7] * optimized_sector_sizes[7]));
+    printf("Mode 2 XA1 Gap ..... %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[8], MB(sectors[8] * 2352), MB(sectors[8] * optimized_sector_sizes[8]));
+    printf("Mode 2 XA2 ......... %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[9], MB(sectors[9] * 2352), MB(sectors[9] * optimized_sector_sizes[9]));
+    printf("Mode 2 XA2 Gap ..... %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[10], MB(sectors[10] * 2352), MB(sectors[10] * optimized_sector_sizes[10]));
+    printf("-------------------------------------------------------------\n");
+    printf("Total .............. %6d ...... %6.2fMb ...... %6.2fMb\n", total_sectors, MB(total_size), MB(ecm_size));
+    printf("\n\n");
+
+    printf(" Sumary\n");
+    printf("-------------------------------------------------------------\n");
+    printf("ECM reduction (input vs ecm) ........... %2.2f%%\n", (1.0 - ((float)ecm_size / total_size)) * 100);
+    printf("Compressed size (output) ............... %3.2fMb\n", MB(compressed_size));
+    printf("Compression ratio (ecm vs output)....... %2.2f%%\n", abs((1.0 - ((float)compressed_size / ecm_size)) * 100));
+    printf("Total reduction (input vs output) ...... %2.2f%%\n", abs((1.0 - ((float)compressed_size / total_size)) * 100));
 }
 
 
