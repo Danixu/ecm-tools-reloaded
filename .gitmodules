@@ -4,3 +4,6 @@
 [submodule "xz"]
 	path = xz
 	url = https://git.tukaani.org/xz.git
+[submodule "lz4"]
+	path = lz4
+	url = https://github.com/lz4/lz4.git
