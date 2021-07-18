@@ -26,9 +26,10 @@ jobs:
           zip -r ecm-tools-reloaded_${{ env.RELEASE_VERSION }}_linux.zip linux/*
           zip -r ecm-tools-reloaded_${{ env.RELEASE_VERSION }}_win64.zip win64/*
 
-      - uses: "marvinpinto/action-automatic-releases@latest"
+      - name: Upload assets
+        uses: marvinpinto/action-automatic-releases@v1.2.1
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           prerelease: false
           files: |
-            'release/*.zip'
+            release/*.zip
