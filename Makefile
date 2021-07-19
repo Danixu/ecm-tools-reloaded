@@ -1,4 +1,4 @@
-COMP_OPT=-O2 -ffunction-sections -Wl,-gc-sections -s -Izlib -Ixz/src/liblzma/api/ -Lxz/src/liblzma/.libs/ -Lzlib
+COMP_OPT=-O2 -ffunction-sections -Wl,-gc-sections -s -Izlib -Ixz/src/liblzma/api/ -Lxz/src/liblzma/.libs/ -Lzlib -Ilz4/lib/ -Ilzlib4
 
 all: ecmtool ecmtool.exe
 
@@ -19,7 +19,7 @@ ecmtool:
 
 	# Compile the Linux release
 	mkdir -p release/linux
-	g++ ${COMP_OPT} -o release/linux/$@ ecmtool.cpp compressor.cpp sector_tools.cpp -lzlinux -llzma
+	g++ ${COMP_OPT} -o release/linux/$@ ecmtool.cpp compressor.cpp sector_tools.cpp -lzlinux -llzma lz4/lib/lz4hc.c lz4/lib/lz4.c lzlib4/lzlib4.cpp
 
 	########## ZLIB CLEAN ##########
 	# Clean the zlib directory at end
@@ -48,7 +48,7 @@ ecmtool.exe:
 
 	# Compile the Win64 release
 	mkdir -p release/win64
-	x86_64-w64-mingw32-g++ ${COMP_OPT} -o release/win64/$@ ecmtool.cpp compressor.cpp sector_tools.cpp -lzwindows -llzma
+	x86_64-w64-mingw32-g++ ${COMP_OPT} -o release/win64/$@ ecmtool.cpp compressor.cpp sector_tools.cpp -lzwindows -llzma lz4/lib/lz4hc.c lz4/lib/lz4.c lzlib4/lzlib4.cpp
 
 	########## ZLIB CLEAN ##########
 	# Clean the zlib directory at end

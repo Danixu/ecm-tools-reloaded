@@ -1,9 +1,29 @@
+////////////////////////////////////////////////////////////////////////////////
+//
+// Created by Daniel Carrasco at https://www.electrosoftcloud.com
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+//
+////////////////////////////////////////////////////////////////////////////////
+
 #include <stdexcept>
 #include "compressor.h"
 
 compressor::compressor(sector_tools_compression mode, bool is_compression, int32_t comp_level) {
     comp_mode = mode;
     compression = is_compression;
+    compression_level = comp_level;
     int ret;
     // Class initialzer
     switch(mode) {
@@ -57,6 +77,21 @@ compressor::compressor(sector_tools_compression mode, bool is_compression, int32
         }
 
         break;
+
+    case C_LZ4:
+        // We will create blocks of 200Kb which is near to output buffer (to keep it working correctly).
+        lzlib4_compress_init(&strm_lz4, 204800, LZLIB4_INPUT_NOSPLIT, (int)(1.34 * comp_level));
+
+        /*
+        strm_lz4 = LZ4_createStreamHC();
+        if (strm_lz4 == NULL) {
+             //throw std::runtime_error("Error initializing the lz4 compressor/decompressor.");
+        }
+        //LZ4_resetStreamHC(strm_lz4, (int)(1.34 * compression_level));
+        LZ4_resetStreamHC(strm_lz4, LZ4HC_CLEVEL_MAX);
+        //LZ4_setCompressionLevel(strm_lz4, (int)(1.34 * comp_level));
+        */
+        break;
     }
 }
 
@@ -74,6 +109,13 @@ int8_t compressor::set_input(uint8_t* in, size_t &in_size){
         case C_LZMA:
             strm_lzma.avail_in = in_size;
             strm_lzma.next_in = in;
+
+            return 0;
+            break;
+
+        case C_LZ4:
+            strm_lz4.avail_in = in_size;
+            strm_lz4.next_in = in;
 
             return 0;
             break;
@@ -104,6 +146,13 @@ int8_t compressor::set_output(uint8_t* out, size_t &out_size){
 
             return 0;
             break;
+
+        case C_LZ4:
+            strm_lz4.avail_out = out_size;
+            strm_lz4.next_out = out;
+
+            return 0;
+            break;
         }
 
         return 0;
@@ -115,16 +164,18 @@ int8_t compressor::set_output(uint8_t* out, size_t &out_size){
 }
 
 
-int8_t compressor::compress(size_t &out_size, uint8_t* in, size_t in_size, uint8_t flushmode){
+int8_t compressor::compress(size_t &out_size, uint8_t* in, size_t in_size, uint8_t flush_mode){
     if (compression) {
         int8_t return_code;
+        lzma_action flushmode_lzma = LZMA_RUN;
+        size_t processed;
 
         switch(comp_mode) {
         case C_ZLIB:
             strm_zlib.avail_in = in_size;
             strm_zlib.next_in = in;
 
-            return_code = deflate(&strm_zlib, flushmode);
+            return_code = deflate(&strm_zlib, flush_mode);
 
             out_size = strm_zlib.avail_out;
             return return_code;
@@ -134,8 +185,7 @@ int8_t compressor::compress(size_t &out_size, uint8_t* in, size_t in_size, uint8
             strm_lzma.avail_in = in_size;
             strm_lzma.next_in = in;
 
-            lzma_action flushmode_lzma = LZMA_RUN;
-            switch (flushmode) {
+            switch (flush_mode) {
                 case Z_FULL_FLUSH:
                     flushmode_lzma = LZMA_FULL_FLUSH;
                     break;
@@ -153,6 +203,35 @@ int8_t compressor::compress(size_t &out_size, uint8_t* in, size_t in_size, uint8
 
             out_size = strm_lzma.avail_out;
             return return_code;
+            break;
+
+        case C_LZ4:
+            strm_lz4.avail_in = in_size;
+            strm_lz4.next_in = in;
+
+            lzlib4_compress_block(&strm_lz4, (lzlib4_flush_mode)flush_mode);
+
+            out_size = strm_lz4.avail_out;
+            
+            /*
+            processed = LZ4_compress_HC_continue(strm_lz4, (const char *)strm_lzma.next_in, (char*)strm_lzma.next_out, strm_lzma.avail_in, strm_lzma.avail_out);
+
+            if (processed == 0) {
+                // Surelly an error ocurred
+                return 1;
+            }
+            // We calculate how much space left in buffer and set it into out_size
+            strm_lzma.avail_out -= processed;
+            out_size = strm_lzma.avail_out;
+
+            // Set the new pointer position
+            strm_lzma.next_out += processed;
+            // This compressor doesn't set the input buffer space it left, so must be set manually
+            strm_lzma.avail_in = 0;
+            if (flushmode == Z_FINISH) {
+                LZ4_resetStreamHC(strm_lz4, (int)(1.34 * compression_level));
+            }
+            */
             break;
         }
 
@@ -214,6 +293,11 @@ int8_t compressor::close(){
         strm_lzma = {};
         return 0;
         break;
+
+    case C_LZ4:
+        //LZ4_freeStreamHC(&strm_lz4); // Closes the program when used. Must be investigated.
+        return 0;
+        break;
     }
 
     return -1;
@@ -226,6 +310,7 @@ size_t compressor::data_left_in() {
         break;
 
     case C_LZMA:
+    case C_LZ4:
         return strm_lzma.avail_in;
         break;
     }
@@ -240,6 +325,7 @@ size_t compressor::data_left_out() {
         break;
 
     case C_LZMA:
+    case C_LZ4:
         return strm_lzma.avail_out;
         break;
     }

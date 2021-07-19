@@ -2,6 +2,7 @@
 //
 #define TITLE "ecmtool - Encoder/decoder for Error Code Modeler format, with advanced features"
 #define COPYR "Copyright (C) 2021 Daniel Carrasco"
+#define VERSI "2.2.0-alpha"
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -28,7 +29,6 @@
 #include <stdbool.h>
 #include <string>
 #include <stdexcept>
-#include "zlib.h"
 
 // Configurations
 #define SECTORS_PER_BLOCK 100
@@ -172,6 +172,9 @@ int main(int argc, char** argv) {
                 else if (strcmp("lzma", optarg) == 0) {
                     audio_compression = C_LZMA;
                 }
+                else if (strcmp("lz4", optarg) == 0) {
+                    audio_compression = C_LZ4;
+                }
                 else {
                     printf("Error: Unknown data compression mode: %s\n\n", optarg);
                     print_help();
@@ -187,6 +190,9 @@ int main(int argc, char** argv) {
                 }
                 else if (strcmp("lzma", optarg) == 0) {
                     data_compression = C_LZMA;
+                }
+                else if (strcmp("lz4", optarg) == 0) {
+                    data_compression = C_LZ4;
                 }
                 else {
                     printf("Error: Unknown data compression mode: %s\n\n", optarg);
@@ -393,11 +399,8 @@ static int8_t ecmify(
         }
     }
 
-    // Buffers size
-    size_t buffer_size = ((size_t)(-1)) - 4095;
-    if((unsigned long)buffer_size > 0x40000lu) {
-        buffer_size = (size_t)0x40000lu;
-    }
+    // Buffers size (8MB each)
+    size_t buffer_size = 0x800000lu;
 
     // Buffers initialization
     // Allocate input buffer space
@@ -646,12 +649,15 @@ static int8_t ecmify(
             ) {
                 compression_option |= LZMA_PRESET_EXTREME;
             }
+            printf("Creating compressor\n");
             compobj = new compressor(
                 (sector_tools_compression)streams_toc[streams_toc_actual].compression,
                 true,
                 compression_option
             );
+            printf("Set output\n");
             compobj -> set_output(comp_buffer, buffer_size);
+            printf("Compression initialized\n");
         }
 
         // Select the compression depending of the stream type and the user options
@@ -697,6 +703,8 @@ static int8_t ecmify(
                 break;
             }
 
+            printf("Compressing sector... Size: %d\n", output_size);
+
             sectors_type[sectors_toc[sectors_toc_actual].mode] += 1;
 
             // Compress the sector using the selected compression (or none)
@@ -714,6 +722,7 @@ static int8_t ecmify(
             // Zlib compression
             case C_ZLIB:
             case C_LZMA:
+            case C_LZ4:
                 size_t compress_buffer_left = 0;
                 // Current sector is the last stream sector
                 if ((current_sector+1) == streams_toc[streams_toc_actual].end_sector) {
@@ -726,6 +735,8 @@ static int8_t ecmify(
                 else {
                     res = compobj -> compress(compress_buffer_left, out_sector, output_size, Z_NO_FLUSH);
                 }
+
+                printf("compress_buffer_left: %d\n", compress_buffer_left);
 
                 // If buffer is above 75% or is the last sector, write the data to the output and reset the state
                 if (compress_buffer_left < (buffer_size * 0.25) || (current_sector+1) == streams_toc[streams_toc_actual].end_sector) {
@@ -1139,16 +1150,16 @@ static void summary(uint32_t * sectors, optimization_options optimizations, sect
     printf("\n\n");
     printf(" Type               Sectors         In Size        Out Size\n");
     printf("------------------------------------------------------------\n");
-    printf("CDDA ............... %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[1], MB(sectors[1] * 2352), MB(sectors[1] * optimized_sector_sizes[1])); 
-    printf("CDDA Gap ........... %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[2], MB(sectors[2] * 2352), MB(sectors[2] * optimized_sector_sizes[2]));
-    printf("Mode 1 ............. %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[3], MB(sectors[3] * 2352), MB(sectors[3] * optimized_sector_sizes[3]));
-    printf("Mode 1 Gap ......... %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[4], MB(sectors[4] * 2352), MB(sectors[4] * optimized_sector_sizes[4]));
-    printf("Mode 2 ............. %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[5], MB(sectors[5] * 2352), MB(sectors[5] * optimized_sector_sizes[5]));
-    printf("Mode 2 Gap ......... %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[6], MB(sectors[6] * 2352), MB(sectors[6] * optimized_sector_sizes[6]));
-    printf("Mode 2 XA1 ......... %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[7], MB(sectors[7] * 2352), MB(sectors[7] * optimized_sector_sizes[7]));
-    printf("Mode 2 XA1 Gap ..... %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[8], MB(sectors[8] * 2352), MB(sectors[8] * optimized_sector_sizes[8]));
-    printf("Mode 2 XA2 ......... %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[9], MB(sectors[9] * 2352), MB(sectors[9] * optimized_sector_sizes[9]));
-    printf("Mode 2 XA2 Gap ..... %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[10], MB(sectors[10] * 2352), MB(sectors[10] * optimized_sector_sizes[10]));
+    printf("CDDA ............... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[1], MB(sectors[1] * 2352), MB(sectors[1] * optimized_sector_sizes[1])); 
+    printf("CDDA Gap ........... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[2], MB(sectors[2] * 2352), MB(sectors[2] * optimized_sector_sizes[2]));
+    printf("Mode 1 ............. %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[3], MB(sectors[3] * 2352), MB(sectors[3] * optimized_sector_sizes[3]));
+    printf("Mode 1 Gap ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[4], MB(sectors[4] * 2352), MB(sectors[4] * optimized_sector_sizes[4]));
+    printf("Mode 2 ............. %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[5], MB(sectors[5] * 2352), MB(sectors[5] * optimized_sector_sizes[5]));
+    printf("Mode 2 Gap ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[6], MB(sectors[6] * 2352), MB(sectors[6] * optimized_sector_sizes[6]));
+    printf("Mode 2 XA1 ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[7], MB(sectors[7] * 2352), MB(sectors[7] * optimized_sector_sizes[7]));
+    printf("Mode 2 XA1 Gap ..... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[8], MB(sectors[8] * 2352), MB(sectors[8] * optimized_sector_sizes[8]));
+    printf("Mode 2 XA2 ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[9], MB(sectors[9] * 2352), MB(sectors[9] * optimized_sector_sizes[9]));
+    printf("Mode 2 XA2 Gap ..... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[10], MB(sectors[10] * 2352), MB(sectors[10] * optimized_sector_sizes[10]));
     printf("-------------------------------------------------------------\n");
     printf("Total .............. %6d ...... %6.2fMb ...... %6.2fMb\n", total_sectors, MB(total_size), MB(ecm_size));
     printf("\n\n");
@@ -1156,7 +1167,7 @@ static void summary(uint32_t * sectors, optimization_options optimizations, sect
     printf(" Sumary\n");
     printf("-------------------------------------------------------------\n");
     printf("ECM reduction (input vs ecm) ........... %2.2f%%\n", (1.0 - ((float)ecm_size / total_size)) * 100);
-    printf("Compressed size (output) ............... %3.2fMb\n", MB(compressed_size));
+    printf("Compressed size (output) ............... %3.2fMB\n", MB(compressed_size));
     printf("Compression ratio (ecm vs output)....... %2.2f%%\n", abs((1.0 - ((float)compressed_size / ecm_size)) * 100));
     printf("Total reduction (input vs output) ...... %2.2f%%\n", abs((1.0 - ((float)compressed_size / total_size)) * 100));
 }
