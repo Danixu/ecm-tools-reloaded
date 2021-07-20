@@ -60,7 +60,7 @@ class compressor {
         z_stream strm_zlib;
         lzma_stream strm_lzma;
         lzma_options_lzma opt_lzma2;
-        lzlib4_stream strm_lz4;
+        lzlib4 * strm_lz4 = NULL;
         sector_tools_compression comp_mode;
         bool compression;
         int32_t compression_level;
