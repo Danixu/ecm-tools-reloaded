@@ -19,9 +19,6 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef COMMON
-#define COMMON
-#endif
 #include "common.h"
 #include "banner.h"
 #include "sector_tools.h"
@@ -394,7 +391,7 @@ static int8_t ecmify(
     if (!force_rewrite) {
         out = fopen(outfilename, "rb");
         if (out) {
-            printf("Error: %s exists; refusing to overwrite\n", outfilename);
+            printf("Error: %s exists; refusing to overwrite. Use the -f argument to force the overwrite.\n", outfilename);
             fclose(out);
             return 1;
         }
@@ -578,18 +575,19 @@ static int8_t ecmify(
 
         // Compress the sectors header
         uint32_t sectors_toc_size = sectors_toc_count.count * sizeof(struct SECTOR);
-        char* sectors_toc_c_buffer = (char*) malloc(sectors_toc_size);
+        char* sectors_toc_c_buffer = (char*) malloc(sectors_toc_size * 2);
         if(!sectors_toc_c_buffer) {
             printf("Out of memory\n");
             return_code = 1;
         }
 
         if(!return_code) {
-            compress_header((uint8_t*)sectors_toc_c_buffer, sectors_toc_size, (uint8_t*)sectors_toc, sectors_toc_size, 9);
+            uint32_t compressed_size = sectors_toc_size * 2;
+            compress_header((uint8_t*)sectors_toc_c_buffer, compressed_size, (uint8_t*)sectors_toc, sectors_toc_size, 9);
 
             // Set the size of header
             streams_toc_count.size = streams_toc_count.count * sizeof(struct STREAM);
-            sectors_toc_count.size = sectors_toc_size;
+            sectors_toc_count.size = compressed_size;
 
             // Once the file is analyzed and we know the TOC, we will process al the data
             //
@@ -609,7 +607,7 @@ static int8_t ecmify(
             fwrite(streams_toc, streams_toc_count.count * sizeof(struct STREAM), 1, out);
             // Write the Sectors TOC to the output file
             fwrite(&sectors_toc_count, sizeof(sectors_toc_count), 1, out);
-            fwrite(sectors_toc_c_buffer, sectors_toc_size, 1, out);
+            fwrite(sectors_toc_c_buffer, compressed_size, 1, out);
 
             // Reset the input file position
             fseeko(in, 0, SEEK_SET);
@@ -721,7 +719,7 @@ static int8_t ecmify(
             case C_LZ4:
                 size_t compress_buffer_left = 0;
                 // Current sector is the last stream sector
-                if ((current_sector+1) == streams_toc[streams_toc_actual].end_sector) {
+                if ((current_sector) == streams_toc[streams_toc_actual].end_sector) {
                     res = compobj -> compress(compress_buffer_left, out_sector, output_size, Z_FINISH);
                 }
                 else if (seekable && (sectors_per_block == 1 || !((current_sector + 1) % sectors_per_block))) {
@@ -733,7 +731,7 @@ static int8_t ecmify(
                 }
 
                 // If buffer is above 75% or is the last sector, write the data to the output and reset the state
-                if (compress_buffer_left < (BUFFER_SIZE * 0.25) || (current_sector+1) == streams_toc[streams_toc_actual].end_sector) {
+                if (compress_buffer_left < (BUFFER_SIZE * 0.25) || (current_sector) == streams_toc[streams_toc_actual].end_sector) {
                     fwrite(comp_buffer, BUFFER_SIZE - compress_buffer_left, 1, out);
                     if (ferror(out)) {
                     printf("\nThere was an error writting the output file");
@@ -781,6 +779,8 @@ static int8_t ecmify(
     fseeko(out, 0, SEEK_END);
     summary(sectors_type, optimizations, sTools, ftello(out));
 
+    printf("Exiting...\n");
+
     //sTools.close();
     fclose(in);
     fflush(out);
@@ -810,7 +810,7 @@ static int8_t unecmify(
     if (!force_rewrite) {
         out = fopen(outfilename, "rb");
         if (out) {
-            printf("Error: %s exists; refusing to overwrite\n", outfilename);
+            printf("Error: %s exists; refusing to overwrite. Use the -f argument to force the overwrite.\n", outfilename);
             fclose(out);
             return 1;
         }
@@ -879,10 +879,12 @@ static int8_t unecmify(
         return_code = 1;
     }
 
+    // Check all sectors (Must be added)
+    uint32_t out_size = sectors_toc_count.count * sizeof(SECTOR);
     if (!return_code) {
         fread(sectors_toc_c_buffer, sectors_toc_count.size, 1, in);
 
-        uint32_t out_size = sectors_toc_count.count * sizeof(SECTOR);
+        
         if (
             decompress_header(
                 (uint8_t*)sectors_toc,
@@ -990,9 +992,10 @@ static int8_t unecmify(
                 fread(in_sector, bytes_to_read, 1, in);
                 break;
 
-            // Zlib compression
+            // Zlib/LZMA/LZ4 compression
             case C_ZLIB:
             case C_LZMA:
+            case C_LZ4:
                 // Decompress the sector data
                 decompobj -> decompress(in_sector, bytes_to_read, decompress_buffer_left, Z_SYNC_FLUSH);
 

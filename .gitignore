@@ -33,4 +33,5 @@ release/
 .~lock.*
 
 .vscode/
-analysis.txt
+*.txt
+test*

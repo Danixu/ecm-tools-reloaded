@@ -45,6 +45,7 @@ class compressor {
     public:
     // Public methods
         compressor(sector_tools_compression mode, bool is_compression, int32_t comp_level = 5);
+        ~compressor();
 
         int8_t set_input(uint8_t* in, size_t &in_size);
         int8_t set_output(uint8_t* out, size_t &out_size);

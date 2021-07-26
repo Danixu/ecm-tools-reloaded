@@ -90,6 +90,12 @@ compressor::compressor(sector_tools_compression mode, bool is_compression, int32
     }
 }
 
+// Destructor function that will call close()
+compressor::~compressor() {
+    printf("Destroying compressor object\n");
+    close();
+}
+
 
 int8_t compressor::set_input(uint8_t* in, size_t &in_size){
     if (!compression) {
@@ -239,6 +245,15 @@ int8_t compressor::decompress(uint8_t* out, size_t out_size, size_t &in_size, ui
             in_size = strm_lzma.avail_in;
             return return_code;
             break;
+
+        case C_LZ4:
+            strm_lz4->strm.avail_out = out_size;
+            strm_lz4->strm.next_out = out;
+            int return_code = strm_lz4->decompress_partial(false, false);
+
+            in_size = strm_lz4->strm.avail_in;
+            return return_code;
+            break;
         }
 
         return 0;
@@ -285,8 +300,10 @@ size_t compressor::data_left_in() {
         break;
 
     case C_LZMA:
-    case C_LZ4:
         return strm_lzma.avail_in;
+        break;
+    case C_LZ4:
+        return strm_lz4->strm.avail_in;
         break;
     }
 
@@ -300,8 +317,11 @@ size_t compressor::data_left_out() {
         break;
 
     case C_LZMA:
-    case C_LZ4:
         return strm_lzma.avail_out;
+        break;
+    
+    case C_LZ4:
+        return strm_lz4->strm.avail_out;
         break;
     }
 
