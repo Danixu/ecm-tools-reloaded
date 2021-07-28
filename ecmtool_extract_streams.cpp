@@ -9,7 +9,6 @@
  * 
  */
 
-#include "common.h"
 #include "sector_tools.h"
 #include <getopt.h>
 #include <stdbool.h>
@@ -58,6 +57,12 @@ static void setcounter_decode(off_t n);
 // Some necessary variables
 static off_t mycounter_decode  = (off_t)-1;
 static off_t mycounter_total   = 0;
+
+void printfileerror(FILE* f, const char* name) {
+    printf("Error: ");
+    if(name) { printf("%s: ", name); }
+    printf("%s\n", f && feof(f) ? "Unexpected end-of-file" : strerror(errno));
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////
