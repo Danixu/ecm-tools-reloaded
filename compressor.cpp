@@ -91,8 +91,7 @@ compressor::compressor(sector_tools_compression mode, bool is_compression, int32
 }
 
 // Destructor function that will call close()
-compressor::~compressor() {
-    printf("Destroying compressor object\n");
+compressor::~compressor(void) {
     close();
 }
 

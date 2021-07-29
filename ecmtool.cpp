@@ -1103,6 +1103,11 @@ static ecmtool_return_code disk_encode (
                 current_sector++;
             }
         }
+
+        if (compobj) {
+            delete compobj;
+            compobj = NULL;
+        }
     
         streams_script[i].stream_data.out_end_position = ftello(emc_out);
     }
