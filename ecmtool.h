@@ -168,7 +168,7 @@ enum ecmtool_return_code {
 
 // Declare the functions
 void print_help();
-static int8_t ecmify(
+static ecmtool_return_code ecmify(
     const char* infilename,
     const char* outfilename,
     const bool force_rewrite,
@@ -179,7 +179,7 @@ static int8_t ecmify(
     bool seekable,
     uint8_t sectors_per_block
 );
-static int8_t unecmify(
+static ecmtool_return_code unecmify(
     const char* infilename,
     const char* outfilename,
     const bool force_rewrite
@@ -227,6 +227,13 @@ static ecmtool_return_code disk_encode (
     optimization_options optimizations,
     uint32_t * sectors_type,
     uint32_t & input_edc
+);
+static ecmtool_return_code disk_decode (
+    sector_tools * sTools,
+    FILE * ecm_in,
+    FILE * image_out,
+    std::vector<STREAM_SCRIPT> & streams_script,
+    optimization_options optimizations
 );
 static void resetcounter(off_t total);
 static void encode_progress(void);
