@@ -395,15 +395,6 @@ static ecmtool_return_code ecmify(
         streams_script
     );
 
-/*
-    print_headers(
-        streams_toc,
-        streams_toc_count,
-        sectors_toc,
-        sectors_toc_count
-    );
-*/
-
     if(!return_code) {
         // Compress the sectors header.  Sectors count is base 0, so one will be added to the size calculation
         uint32_t sectors_toc_size = (sectors_toc_count.count + 1) * sizeof(struct SECTOR);
@@ -481,19 +472,19 @@ static ecmtool_return_code ecmify(
     // Write the streams header. The count is base 0, so one will be added for the calculation
     fwrite(streams_toc, streams_toc_count.size, 1, out);
 
-    // End Of TOC reached, so file should have be processed completly
-    if (ftello(in) != in_total_size) {
-        printf("\n\nThere was an error processing the input file...\n");
-        printfileerror(in, infilename);
-        return ECMTOOL_FILE_READ_ERROR;
-    }
-
     print_headers(
         streams_toc,
         streams_toc_count,
         sectors_toc,
         sectors_toc_count
     );
+
+    // End Of TOC reached, so file should have be processed completly
+    if (ftello(in) != in_total_size) {
+        printf("\n\nThere was an error processing the input file...\n");
+        printfileerror(in, infilename);
+        return ECMTOOL_FILE_READ_ERROR;
+    }
 
     fseeko(out, 0, SEEK_END);
     summary(sectors_type, optimizations, sTools, ftello(out));
@@ -579,7 +570,6 @@ static ecmtool_return_code unecmify(
     // Streams TOC
     SEC_STR_SIZE streams_toc_count = {0, 0};
     fread(&streams_toc_count, sizeof(streams_toc_count), 1, in);
-    printf("EndOfStreams position: %d - count: %d\n", ftello(in), streams_toc_count.count);
     STREAM *streams_toc = new STREAM[streams_toc_count.count + 1];
     if (sizeof(streams_toc) > streams_toc_count.size) {
         // There was an error in the header
@@ -631,13 +621,6 @@ static ecmtool_return_code unecmify(
         sectors_toc,
         sectors_toc_count,
         streams_script
-    );
-
-    print_headers(
-        streams_toc,
-        streams_toc_count,
-        sectors_toc,
-        sectors_toc_count
     );
 
     if (return_code) {
@@ -790,19 +773,17 @@ static ecmtool_return_code disk_analyzer (
             setcounter_analyze(ftello(image_file));
 
             sector_tools_types detected_type = sTools->detect(in_sector);
-            if (detected_type == STT_UNKNOWN) {
+            if (curtype == STT_UNKNOWN) {
                 // Initialize the first sector type
                 sectors_toc[sectors_toc_size->count].mode = detected_type;
                 sectors_toc[sectors_toc_size->count].sector_count = 1;
                 curtype = detected_type;
-            }    
+            }
             else if (detected_type == curtype) {
                 // Sector type is the same so will be added
                 sectors_toc[sectors_toc_size->count].sector_count++;
             }
             else {
-                // New sector type
-                sectors_toc_size->count++;
                 // Checking if the stream type is also different than the last one
                 sector_tools_stream_types stream_type = sTools->detect_stream(detected_type);
 
