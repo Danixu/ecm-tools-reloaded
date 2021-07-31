@@ -395,9 +395,18 @@ static ecmtool_return_code ecmify(
         streams_script
     );
 
+/*
+    print_headers(
+        streams_toc,
+        streams_toc_count,
+        sectors_toc,
+        sectors_toc_count
+    );
+*/
+
     if(!return_code) {
-        // Compress the sectors header
-        uint32_t sectors_toc_size = sectors_toc_count.count * sizeof(struct SECTOR);
+        // Compress the sectors header.  Sectors count is base 0, so one will be added to the size calculation
+        uint32_t sectors_toc_size = (sectors_toc_count.count + 1) * sizeof(struct SECTOR);
         char* sectors_toc_c_buffer = (char*) malloc(sectors_toc_size * 2);
         if(!sectors_toc_c_buffer) {
             printf("Out of memory\n");
@@ -408,8 +417,8 @@ static ecmtool_return_code ecmify(
             uint32_t compressed_size = sectors_toc_size * 2;
             compress_header((uint8_t*)sectors_toc_c_buffer, compressed_size, (uint8_t*)sectors_toc, sectors_toc_size, 9);
 
-            // Set the size of header
-            streams_toc_count.size = streams_toc_count.count * sizeof(struct STREAM);
+            // Set the size of header. Streams count is base 0, so one will be added to the size calculation
+            streams_toc_count.size = (streams_toc_count.count + 1) * sizeof(struct STREAM);
             sectors_toc_count.size = compressed_size;
 
             // Once the file is analyzed and we know the TOC, we will process al the data
@@ -426,7 +435,7 @@ static ecmtool_return_code ecmify(
 
             // Write the Streams TOC to the output file
             fwrite(&streams_toc_count, sizeof(streams_toc_count), 1, out);
-            fwrite(streams_toc, streams_toc_count.count * sizeof(struct STREAM), 1, out);
+            fwrite(streams_toc, streams_toc_count.size, 1, out);
             // Write the Sectors TOC to the output file
             fwrite(&sectors_toc_count, sizeof(sectors_toc_count), 1, out);
             fwrite(sectors_toc_c_buffer, compressed_size, 1, out);
@@ -468,8 +477,9 @@ static ecmtool_return_code ecmify(
     fwrite(crc, 4, 1, out);
 
     // Rewrite the streams header to store the new data (end position in output file)
-    fseeko(out, 5 + sizeof(streams_toc_count) + sizeof(optimizations), SEEK_SET);
-    fwrite(streams_toc, streams_toc_count.count * sizeof(struct STREAM), 1, out);
+    fseeko(out, 5 + sizeof(optimizations) + sizeof(streams_toc_count), SEEK_SET);
+    // Write the streams header. The count is base 0, so one will be added for the calculation
+    fwrite(streams_toc, streams_toc_count.size, 1, out);
 
     // End Of TOC reached, so file should have be processed completly
     if (ftello(in) != in_total_size) {
@@ -477,6 +487,13 @@ static ecmtool_return_code ecmify(
         printfileerror(in, infilename);
         return ECMTOOL_FILE_READ_ERROR;
     }
+
+    print_headers(
+        streams_toc,
+        streams_toc_count,
+        sectors_toc,
+        sectors_toc_count
+    );
 
     fseeko(out, 0, SEEK_END);
     summary(sectors_type, optimizations, sTools, ftello(out));
@@ -562,21 +579,26 @@ static ecmtool_return_code unecmify(
     // Streams TOC
     SEC_STR_SIZE streams_toc_count = {0, 0};
     fread(&streams_toc_count, sizeof(streams_toc_count), 1, in);
-    STREAM *streams_toc = new STREAM[streams_toc_count.count];
-    fread(streams_toc, sizeof(STREAM) * streams_toc_count.count, 1, in);
+    printf("EndOfStreams position: %d - count: %d\n", ftello(in), streams_toc_count.count);
+    STREAM *streams_toc = new STREAM[streams_toc_count.count + 1];
+    if (sizeof(streams_toc) > streams_toc_count.size) {
+        // There was an error in the header
+        return ECMTOOL_CORRUPTED_HEADER;
+    }
+    fread(streams_toc, streams_toc_count.size, 1, in);
 
     // Sectors TOC
     SEC_STR_SIZE sectors_toc_count = {0, 0};
     fread(&sectors_toc_count, sizeof(sectors_toc_count), 1, in);
-    SECTOR *sectors_toc = new SECTOR[sectors_toc_count.count];
+    SECTOR *sectors_toc = new SECTOR[sectors_toc_count.count + 1];
     char* sectors_toc_c_buffer = (char*) malloc(sectors_toc_count.size);
     if(!sectors_toc_c_buffer) {
         printf("Out of memory\n");
         return_code = ECMTOOL_BUFFER_MEMORY_ERROR;
     }
 
-    // Check all sectors (Must be added)
-    uint32_t out_size = sectors_toc_count.count * sizeof(SECTOR);
+    // Decompress the header
+    uint32_t out_size = (sectors_toc_count.count + 1) * sizeof(struct SECTOR);
     if (!return_code) {
         fread(sectors_toc_c_buffer, sectors_toc_count.size, 1, in);
 
@@ -589,8 +611,13 @@ static ecmtool_return_code unecmify(
             )
         ) {
             printf("There was an error reading the header\n");
-            return_code = ECMTOOL_FILE_READ_ERROR;
+            return_code = ECMTOOL_CORRUPTED_HEADER;
         }
+    }
+
+    // Free the compressed buffer
+    if(sectors_toc_c_buffer) {
+        free(sectors_toc_c_buffer);
     }
 
     // Initializing the Sector Tools object
@@ -605,6 +632,18 @@ static ecmtool_return_code unecmify(
         sectors_toc_count,
         streams_script
     );
+
+    print_headers(
+        streams_toc,
+        streams_toc_count,
+        sectors_toc,
+        sectors_toc_count
+    );
+
+    if (return_code) {
+        printf("return_code: %d\n", return_code);
+        return ECMTOOL_CORRUPTED_STREAM;
+    }
 
     return_code = disk_decode (
         &sTools,

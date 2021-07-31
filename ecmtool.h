@@ -142,8 +142,8 @@ struct SECTOR {
 #pragma pack(pop)
 
 struct SEC_STR_SIZE {
-    uint32_t count = 0;
-    uint32_t size = 0;
+    uint32_t count;
+    uint32_t size;
 };
 
 // Struct for script vector
@@ -161,7 +161,8 @@ enum ecmtool_return_code {
     ECMTOOL_FILE_WRITE_ERROR,
     ECMTOOL_BUFFER_MEMORY_ERROR,
     ECMTOOL_PROCESSING_ERROR,
-    ECMTOOL_CORRUPTED_STREAM
+    ECMTOOL_CORRUPTED_STREAM,
+    ECMTOOL_CORRUPTED_HEADER
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -248,3 +249,34 @@ static void summary (
     sector_tools sTools,
     size_t compressed_size
 );
+
+
+
+
+
+void print_headers(
+    STREAM * streams_toc,
+    SEC_STR_SIZE & streams_toc_count,
+    SECTOR * sectors_toc,
+    SEC_STR_SIZE & sectors_toc_count
+) {
+    printf("Printing streams toc...\n");
+    for (uint32_t i = 0; i <= streams_toc_count.count; i++) {
+        printf(
+            "Stream: compression = %d, end_sector = %d, out_end_position = %d, type = %d\n",
+            streams_toc[i].compression,
+            streams_toc[i].end_sector,
+            streams_toc[i].out_end_position,
+            streams_toc[i].type
+        );
+    }
+    
+    printf("\nPrinting sectors toc\n");
+    for (uint32_t i = 0; i <= sectors_toc_count.count; i++) {
+        printf(
+            "Sector: Mode = %d, Sector_Count = %d\n",
+            sectors_toc[i].mode,
+            sectors_toc[i].sector_count
+        );
+    }
+}
