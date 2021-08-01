@@ -295,7 +295,7 @@ class sector_tools {
         );
         static int8_t encoded_sector_size(
             sector_tools_types type,
-            uint16_t& output_size,
+            size_t& output_size,
             optimization_options options
         );
 

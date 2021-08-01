@@ -40,6 +40,7 @@ compressor::compressor(sector_tools_compression mode, bool is_compression, int32
         }
         
         if (ret != Z_OK) {
+            printf("There was an error initializing the ZLIB encoder/decoder\n");
             //throw std::runtime_error("Error initializing the zlib compressor/decompressor.");
         }
 
@@ -57,11 +58,6 @@ compressor::compressor(sector_tools_compression mode, bool is_compression, int32
                 { LZMA_VLI_UNKNOWN, NULL },
             };
             ret = lzma_stream_encoder(&strm_lzma, filters, LZMA_CHECK_NONE); // CRC is already checked
-
-            // Return successfully if the initialization went fine.
-            if (ret != LZMA_OK) {
-                //throw std::runtime_error("Error initializing the lzma2 compressor/decompressor.");
-            }
         }
         else {
             ret = lzma_stream_decoder(
@@ -69,18 +65,19 @@ compressor::compressor(sector_tools_compression mode, bool is_compression, int32
                 UINT64_MAX,
                 LZMA_IGNORE_CHECK
             );
+        }
 
-            // Return successfully if the initialization went fine.
-            if (ret != LZMA_OK) {
-                //throw std::runtime_error("Error initializing the lzma2 compressor/decompressor.");
-            }
+        // Return successfully if the initialization went fine.
+        if (ret != LZMA_OK) {
+            printf("There was an error initializing LZMA encoder/decoder\n");
+            //throw std::runtime_error("Error initializing the lzma2 compressor/decompressor.");
         }
 
         break;
 
     case C_LZ4:
         if (is_compression) {
-            // We will create blocks of 1Mb.
+            // We will create blocks of 1Mb and data will not be splitted between blocks.
             strm_lz4 = new lzlib4((size_t)1048576, LZLIB4_INPUT_NOSPLIT, (int8_t)(1.34 * comp_level));
         }
         else {
@@ -223,7 +220,7 @@ int8_t compressor::compress(size_t &out_size, uint8_t* in, size_t in_size, uint8
     }
 }
 
-int8_t compressor::decompress(uint8_t* out, size_t out_size, size_t &in_size, uint8_t flusmode){
+int8_t compressor::decompress(uint8_t* out, size_t & out_size, size_t &in_size, uint8_t flusmode){
     if (!compression) {
         int8_t return_code;
         switch(comp_mode) {

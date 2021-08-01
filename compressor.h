@@ -50,7 +50,7 @@ class compressor {
         int8_t set_input(uint8_t* in, size_t &in_size);
         int8_t set_output(uint8_t* out, size_t &out_size);
         int8_t compress(size_t &out_size, uint8_t* in, size_t in_size, uint8_t flushmode = Z_NO_FLUSH);
-        int8_t decompress(uint8_t* out, size_t out_size, size_t &in_size, uint8_t flusmode);
+        int8_t decompress(uint8_t* out, size_t & out_size, size_t &in_size, uint8_t flusmode);
         size_t data_left_in();
         size_t data_left_out();
 

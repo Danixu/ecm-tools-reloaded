@@ -36,7 +36,7 @@
 
 // Configurations
 #define SECTORS_PER_BLOCK 100
-#define BUFFER_SIZE 0x800000lu
+#define BUFFER_SIZE 0x80000lu
 
 // MB Macro
 #define MB(x) ((float)(x) / 1024 / 1024)
@@ -249,34 +249,3 @@ static void summary (
     sector_tools sTools,
     size_t compressed_size
 );
-
-
-
-
-
-void print_headers(
-    STREAM * streams_toc,
-    SEC_STR_SIZE & streams_toc_count,
-    SECTOR * sectors_toc,
-    SEC_STR_SIZE & sectors_toc_count
-) {
-    printf("Printing streams toc...\n");
-    for (uint32_t i = 0; i <= streams_toc_count.count; i++) {
-        printf(
-            "Stream: compression = %d, end_sector = %d, out_end_position = %d, type = %d\n",
-            streams_toc[i].compression,
-            streams_toc[i].end_sector,
-            streams_toc[i].out_end_position,
-            streams_toc[i].type
-        );
-    }
-    
-    printf("\nPrinting sectors toc\n");
-    for (uint32_t i = 0; i <= sectors_toc_count.count; i++) {
-        printf(
-            "Sector: Mode = %d, Sector_Count = %d\n",
-            sectors_toc[i].mode,
-            sectors_toc[i].sector_count
-        );
-    }
-}

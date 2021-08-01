@@ -1027,7 +1027,7 @@ int8_t sector_tools::regenerate_sector(
 //
 int8_t sector_tools::encoded_sector_size(
     sector_tools_types type,
-    uint16_t& output_size,
+    size_t& output_size,
     optimization_options options
 ) {
     output_size = 0;

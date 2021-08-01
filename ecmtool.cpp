@@ -472,13 +472,6 @@ static ecmtool_return_code ecmify(
     // Write the streams header. The count is base 0, so one will be added for the calculation
     fwrite(streams_toc, streams_toc_count.size, 1, out);
 
-    print_headers(
-        streams_toc,
-        streams_toc_count,
-        sectors_toc,
-        sectors_toc_count
-    );
-
     // End Of TOC reached, so file should have be processed completly
     if (ftello(in) != in_total_size) {
         printf("\n\nThere was an error processing the input file...\n");
@@ -686,7 +679,7 @@ static void summary(uint32_t * sectors, optimization_options optimizations, sect
 
     // Calculate the size per sector type
     for (uint8_t i = 1; i < 11; i++) {
-        uint16_t bytes_to_read = 0;
+        size_t bytes_to_read = 0;
         // Getting the sector size prior to read, to read the real sector size and avoid to fseek every time
         sTools.encoded_sector_size(
             (sector_tools_types)i,
@@ -835,7 +828,7 @@ static ecmtool_return_code disk_analyzer (
 static ecmtool_return_code disk_encode (
     sector_tools * sTools,
     FILE * image_in,
-    FILE * emc_out,
+    FILE * ecm_out,
     std::vector<STREAM_SCRIPT> & streams_script,
     uint8_t compression_level,
     bool extreme_compression,
@@ -925,8 +918,8 @@ static ecmtool_return_code disk_encode (
                 switch (streams_script[i].stream_data.compression) {
                 // No compression
                 case C_NONE:
-                    fwrite(out_sector, output_size, 1, emc_out);
-                    if (ferror(emc_out)) {
+                    fwrite(out_sector, output_size, 1, ecm_out);
+                    if (ferror(ecm_out)) {
                         printf("\nThere was an error writting the output file");
                         return ECMTOOL_FILE_WRITE_ERROR;
                     }
@@ -951,8 +944,8 @@ static ecmtool_return_code disk_encode (
 
                     // If buffer is above 75% or is the last sector, write the data to the output and reset the state
                     if (compress_buffer_left < (BUFFER_SIZE * 0.25) || (current_sector) == streams_script[i].stream_data.end_sector) {
-                        fwrite(comp_buffer, BUFFER_SIZE - compress_buffer_left, 1, emc_out);
-                        if (ferror(emc_out)) {
+                        fwrite(comp_buffer, BUFFER_SIZE - compress_buffer_left, 1, ecm_out);
+                        if (ferror(ecm_out)) {
                         printf("\nThere was an error writting the output file");
                         return ECMTOOL_FILE_WRITE_ERROR;
                     }
@@ -976,7 +969,7 @@ static ecmtool_return_code disk_encode (
             free(comp_buffer);
         }
     
-        streams_script[i].stream_data.out_end_position = ftello(emc_out);
+        streams_script[i].stream_data.out_end_position = ftello(ecm_out);
     }
 
     return ECMTOOL_OK;
@@ -1039,7 +1032,7 @@ static ecmtool_return_code disk_decode (
                     return ECMTOOL_FILE_READ_ERROR;
                 }
 
-                uint16_t bytes_to_read = 0;
+                size_t bytes_to_read = 0;
                 // Getting the sector size prior to read, to read the real sector size and avoid to fseek every time
                 sTools->encoded_sector_size(
                     (sector_tools_types)streams_script[i].sectors_data[j].mode,
@@ -1063,7 +1056,7 @@ static ecmtool_return_code disk_decode (
 
                     // If not in end of stream and buffer is below 25%, read more data
                     // To keep the buffer always ready
-                    if (streams_script[i].stream_data.out_end_position < ftello(ecm_in) && decompress_buffer_left < (BUFFER_SIZE * 0.25)) {
+                    if (streams_script[i].stream_data.out_end_position > ftello(ecm_in) && decompress_buffer_left < (BUFFER_SIZE * 0.25)) {
                         // Move the left data to first bytes
                         size_t position = BUFFER_SIZE - decompress_buffer_left;
                         memmove(decomp_buffer, decomp_buffer + position, decompress_buffer_left);
@@ -1109,6 +1102,9 @@ static ecmtool_return_code disk_decode (
                 current_sector++;
             }
         }
+
+        // Seek to the next stream start position:
+        fseeko(ecm_in, streams_script[i].stream_data.out_end_position, SEEK_SET);
 
         if (decompobj) {
             delete  decompobj;
