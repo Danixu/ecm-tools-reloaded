@@ -36,7 +36,7 @@
 
 // Configurations
 #define SECTORS_PER_BLOCK 100
-#define BUFFER_SIZE 0x80000lu
+#define BUFFER_SIZE 0x800000lu
 
 // MB Macro
 #define MB(x) ((float)(x) / 1024 / 1024)

@@ -617,7 +617,6 @@ static ecmtool_return_code unecmify(
     );
 
     if (return_code) {
-        printf("return_code: %d\n", return_code);
         return ECMTOOL_CORRUPTED_STREAM;
     }
 
@@ -946,9 +945,9 @@ static ecmtool_return_code disk_encode (
                     if (compress_buffer_left < (BUFFER_SIZE * 0.25) || (current_sector) == streams_script[i].stream_data.end_sector) {
                         fwrite(comp_buffer, BUFFER_SIZE - compress_buffer_left, 1, ecm_out);
                         if (ferror(ecm_out)) {
-                        printf("\nThere was an error writting the output file");
-                        return ECMTOOL_FILE_WRITE_ERROR;
-                    }
+                            printf("\nThere was an error writting the output file");
+                            return ECMTOOL_FILE_WRITE_ERROR;
+                        }
                         size_t output_size = BUFFER_SIZE;
                         compobj -> set_output(comp_buffer, output_size);
                     }
