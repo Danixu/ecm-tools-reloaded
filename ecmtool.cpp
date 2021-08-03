@@ -1,8 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
-#define TITLE "ecmtool - Encoder/decoder for Error Code Modeler format, with advanced features"
-#define COPYR "Copyright (C) 2021 Daniel Carrasco"
-//
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
@@ -18,88 +15,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef COMMON
-#define COMMON
-#endif
-#include "common.h"
-#include "banner.h"
-#include "sector_tools.h"
-#include <getopt.h>
-#include <stdbool.h>
-#include <string>
-#include <stdexcept>
-#include "zlib.h"
-
-// Configurations
-#define SECTORS_PER_BLOCK 100
-
-// MB Macro
-#define MB(x) ((float)(x) / 1024 / 1024)
-
-// Streams and sectors structs
-#pragma pack(push, 1)
-struct STREAM {
-    uint8_t type : 1;
-    uint8_t compression : 3;
-    uint32_t end_sector;
-    uint32_t out_end_position;
-};
-
-struct SECTOR {
-    uint8_t mode : 4;
-    uint32_t sector_count;
-};
-
-struct SEC_STR_SIZE {
-    uint32_t count;
-    uint32_t size;
-};
-#pragma pack(pop) 
-
-// Declare the functions
-void print_help();
-static int8_t ecmify(
-    const char* infilename,
-    const char* outfilename,
-    const bool force_rewrite,
-    sector_tools_compression data_compression,
-    sector_tools_compression audio_compression,
-    uint8_t compression_level,
-    bool extreme_compression,
-    bool seekable,
-    uint8_t sectors_per_block
-);
-static int8_t unecmify(
-    const char* infilename,
-    const char* outfilename,
-    const bool force_rewrite
-);
-int compress_header (
-    uint8_t* dest,
-    uint32_t &destLen,
-    uint8_t* source,
-    uint32_t sourceLen,
-    int level
-);
-int decompress_header (
-    uint8_t* dest,
-    uint32_t &destLen,
-    uint8_t* source,
-    uint32_t sourceLen
-);
-static void resetcounter(off_t total);
-static void encode_progress(void);
-static void decode_progress(void);
-static void setcounter_analyze(off_t n);
-static void setcounter_encode(off_t n);
-static void setcounter_decode(off_t n);
-
-static void summary(
-    uint32_t * sectors,
-    optimization_options optimizations,
-    sector_tools sTools,
-    size_t compressed_size
-);
+#include "ecmtool.h"
 
 // Some necessary variables
 static off_t mycounter_analyze = (off_t)-1;
@@ -172,6 +88,9 @@ int main(int argc, char** argv) {
                 else if (strcmp("lzma", optarg) == 0) {
                     audio_compression = C_LZMA;
                 }
+                else if (strcmp("lz4", optarg) == 0) {
+                    audio_compression = C_LZ4;
+                }
                 else {
                     printf("Error: Unknown data compression mode: %s\n\n", optarg);
                     print_help();
@@ -187,6 +106,9 @@ int main(int argc, char** argv) {
                 }
                 else if (strcmp("lzma", optarg) == 0) {
                     data_compression = C_LZMA;
+                }
+                else if (strcmp("lz4", optarg) == 0) {
+                    data_compression = C_LZ4;
                 }
                 else {
                     printf("Error: Unknown data compression mode: %s\n\n", optarg);
@@ -356,7 +278,7 @@ int main(int argc, char** argv) {
 }
 
 
-static int8_t ecmify(
+static ecmtool_return_code ecmify(
     const char* infilename,
     const char* outfilename,
     const bool force_rewrite,
@@ -370,7 +292,7 @@ static int8_t ecmify(
     // IN/OUT files definition
     FILE* in  = NULL;
     FILE* out = NULL;
-    uint8_t return_code = 0;
+    ecmtool_return_code return_code = ECMTOOL_OK;
 
     // Optimization options
     optimization_options optimizations = (
@@ -387,50 +309,35 @@ static int8_t ecmify(
     if (!force_rewrite) {
         out = fopen(outfilename, "rb");
         if (out) {
-            printf("Error: %s exists; refusing to overwrite\n", outfilename);
+            printf("Error: %s exists; refusing to overwrite. Use the -f argument to force the overwrite.\n", outfilename);
             fclose(out);
-            return 1;
+            return ECMTOOL_FILE_WRITE_ERROR;
         }
-    }
-
-    // Buffers size
-    size_t buffer_size = ((size_t)(-1)) - 4095;
-    if((unsigned long)buffer_size > 0x40000lu) {
-        buffer_size = (size_t)0x40000lu;
     }
 
     // Buffers initialization
     // Allocate input buffer space
     char* in_buffer = NULL;
-    in_buffer = (char*) malloc(buffer_size);
+    in_buffer = (char*) malloc(BUFFER_SIZE);
     if(!in_buffer) {
         printf("Out of memory\n");
-        return 1;
+        return ECMTOOL_BUFFER_MEMORY_ERROR;
     }
     // Allocate output buffer space
     char* out_buffer = NULL;
-    out_buffer = (char*) malloc(buffer_size);
+    out_buffer = (char*) malloc(BUFFER_SIZE);
     if(!out_buffer) {
         printf("Out of memory\n");
-        return 1;
-    }
-    // Allocate compressor buffer if required
-    uint8_t* comp_buffer = NULL;
-    if (data_compression || audio_compression) {
-        comp_buffer = (uint8_t*) malloc(buffer_size);
-        if(!comp_buffer) {
-            printf("Out of memory\n");
-            return 1;
-        }
+        return ECMTOOL_BUFFER_MEMORY_ERROR;
     }
 
     // Open input file
     in = fopen(infilename, "rb");
     if (!in) {
         printfileerror(in, infilename);
-        return 1;
+        return ECMTOOL_FILE_READ_ERROR;
     }
-    setvbuf(in, in_buffer, _IOFBF, buffer_size);
+    setvbuf(in, in_buffer, _IOFBF, BUFFER_SIZE);
 
     // We will check if image is a CD-ROM
     // CD-ROMS sectors are 2352 bytes size and are always filled, so image size must be multiple
@@ -441,7 +348,7 @@ static int8_t ecmify(
         printf("       This program only allows to process CD-ROM images\n");
 
         fclose(in);
-        return 1;
+        return ECMTOOL_FILE_READ_ERROR;
     }
     fseeko(in, 0, SEEK_SET);
     // Reset the counters
@@ -451,12 +358,9 @@ static int8_t ecmify(
     out = fopen(outfilename, "wb");
     if (!out) {
         printfileerror(out, infilename);
-        return 1;
+        return ECMTOOL_FILE_WRITE_ERROR;
     }
-    setvbuf(out, out_buffer, _IOFBF, buffer_size);
-
-    // CRC calculation to check the decoded stream
-    uint32_t input_edc = 0;
+    setvbuf(out, out_buffer, _IOFBF, BUFFER_SIZE);
 
     // Sectors TOC
     SECTOR *sectors_toc = new SECTOR[0xFFFFF];
@@ -465,132 +369,51 @@ static int8_t ecmify(
     // Streams TOC
     STREAM *streams_toc = new STREAM[0xFFFFF];
     SEC_STR_SIZE streams_toc_count = {0, 0};
-    sector_tools_stream_types curstreamtype = STST_UNKNOWN; // not a valid type
-
-    //
-    // Current sector type (run)
-    //
-    sector_tools_types curtype = STT_UNKNOWN; // not a valid type
-    uint32_t           curtype_count = 0;
-    uint32_t           current_sector = 0;
 
     // Sector Tools object
     sector_tools sTools = sector_tools();
 
-    // Compressor
-    compressor *compobj = NULL;
+    return_code = disk_analyzer (
+        &sTools,
+        in,
+        in_total_size,
+        streams_toc,
+        &streams_toc_count,
+        sectors_toc,
+        &sectors_toc_count,
+        data_compression,
+        audio_compression
+    );
 
-    // Sector buffer
-    uint8_t in_sector[2352];
-    uint8_t out_sector[2352];
-
-    //
-    // Starting the analyzing part to generate the TOC header
-    //
-    while (!feof(in)) {
-        // Read the next sector
-        if (fread(in_sector, 2352, 1, in)) {
-            // Add a sector to the count
-            current_sector++;
-            // Update the input file position
-            setcounter_analyze(ftello(in));
-
-            sector_tools_types detected_type = sTools.detect(in_sector);
-
-            if (detected_type == curtype) {
-                // Same type as last sector
-                curtype_count++;
-            }
-            else {
-                // Checking if the stream type is different than the last one
-                sector_tools_stream_types stream_type = sTools.detect_stream(detected_type);
-
-                if (curstreamtype == STST_UNKNOWN) {
-                    // First stream position. We need the end of stream, so we will just save the type
-                    curstreamtype = stream_type;
-                }
-                else if (stream_type != curstreamtype) {
-                    // nTH stream, saving the position as "END" of the last stream
-                    sector_tools_compression compression;
-                    if (curstreamtype == STST_AUDIO) {
-                        compression = audio_compression;
-                    }
-                    else {
-                        compression = data_compression;
-                    }
-                    streams_toc[streams_toc_count.count] = {
-                        (bool)(curstreamtype - 1),
-                        compression,
-                        current_sector
-                    };
-                    streams_toc_count.count++;
-                    curstreamtype = stream_type;
-                }
-
-                if(curtype_count > 0) {
-                    // Generate the sector mode data
-                    sectors_toc[sectors_toc_count.count] = {
-                        curtype,
-                        curtype_count
-                    };
-
-                    sectors_toc_count.count++;
-                }
-
-                curtype = detected_type;
-                curtype_count = 1;
-            }
-        }
-        else if(ferror(in)) {
-            // Something strange happens
-            printf("\n\nThere was an error analyzing the input file...\n");
-            printfileerror(in, infilename);
-            return_code = 1;
-        }
-    }
+    // Convert the headers to an script to be easily followed by the encoder
+    std::vector<STREAM_SCRIPT> streams_script;
+    return_code = task_maker (
+        streams_toc,
+        streams_toc_count,
+        sectors_toc,
+        sectors_toc_count,
+        streams_script
+    );
 
     if(!return_code) {
-        // Set the last stream end position
-        sector_tools_compression compression;
-        if (curstreamtype == STST_AUDIO) {
-            compression = audio_compression;
-        }
-        else {
-            compression = data_compression;
-        }
-        streams_toc[streams_toc_count.count] = {
-            (bool)(curstreamtype - 1),
-            compression,
-            current_sector,
-            0
-        };
-        streams_toc_count.count++;
-
-        // Set the last sectors type and count
-        sectors_toc[sectors_toc_count.count] = {
-            curtype,
-            curtype_count
-        };
-        sectors_toc_count.count++;
-
-        // Compress the sectors header
-        uint32_t sectors_toc_size = sectors_toc_count.count * sizeof(struct SECTOR);
-        char* sectors_toc_c_buffer = (char*) malloc(sectors_toc_size);
+        // Compress the sectors header.  Sectors count is base 0, so one will be added to the size calculation
+        uint32_t sectors_toc_size = (sectors_toc_count.count + 1) * sizeof(struct SECTOR);
+        char* sectors_toc_c_buffer = (char*) malloc(sectors_toc_size * 2);
         if(!sectors_toc_c_buffer) {
             printf("Out of memory\n");
-            return_code = 1;
+            return ECMTOOL_BUFFER_MEMORY_ERROR;
         }
 
         if(!return_code) {
-            compress_header((uint8_t*)sectors_toc_c_buffer, sectors_toc_size, (uint8_t*)sectors_toc, sectors_toc_size, 9);
+            uint32_t compressed_size = sectors_toc_size * 2;
+            compress_header((uint8_t*)sectors_toc_c_buffer, compressed_size, (uint8_t*)sectors_toc, sectors_toc_size, 9);
 
-            // Set the size of header
-            streams_toc_count.size = streams_toc_count.count * sizeof(struct STREAM);
-            sectors_toc_count.size = sectors_toc_size;
+            // Set the size of header. Streams count is base 0, so one will be added to the size calculation
+            streams_toc_count.size = (streams_toc_count.count + 1) * sizeof(struct STREAM);
+            sectors_toc_count.size = compressed_size;
 
             // Once the file is analyzed and we know the TOC, we will process al the data
             //
-            //printf("Writting header and TOC data to output buffer\n");
             // Add the Header to the output file
             uint8_t header[5];
             header[0] = 'E';
@@ -603,158 +426,41 @@ static int8_t ecmify(
 
             // Write the Streams TOC to the output file
             fwrite(&streams_toc_count, sizeof(streams_toc_count), 1, out);
-            fwrite(streams_toc, streams_toc_count.count * sizeof(struct STREAM), 1, out);
+            fwrite(streams_toc, streams_toc_count.size, 1, out);
             // Write the Sectors TOC to the output file
             fwrite(&sectors_toc_count, sizeof(sectors_toc_count), 1, out);
-            fwrite(sectors_toc_c_buffer, sectors_toc_size, 1, out);
+            fwrite(sectors_toc_c_buffer, compressed_size, 1, out);
 
             // Reset the input file position
             fseeko(in, 0, SEEK_SET);
-            // Reset the current sector count
-            current_sector = 1;
         }
     }
+
+    // CRC calculation to check the decoded stream
+    uint32_t input_edc = 0;
 
     //
     // Starting the processing part
     //
-    uint32_t streams_toc_actual = 0;
     uint32_t sectors_type[11] = {};
-    // Loop through every sector type in toc
-    for (uint32_t sectors_toc_actual = 0; sectors_toc_actual < sectors_toc_count.count; sectors_toc_actual++) {
-        if (return_code) { break; } // If there was an error, break the loop
+    return_code = disk_encode (
+        &sTools,
+        in,
+        out,
+        streams_script,
+        compression_level,
+        extreme_compression,
+        seekable,
+        sectors_per_block,
+        optimizations,
+        sectors_type,
+        input_edc
+    );
 
-        // If the next sector correspond to the next stream, advance to it
-        if (current_sector == streams_toc[streams_toc_actual].end_sector) {
-            if (compobj) {
-                size_t compress_buffer_left = 0;
-                compobj -> compress(compress_buffer_left, out_sector, 0, Z_FINISH);
-                fwrite(comp_buffer, buffer_size - compress_buffer_left, 1, out);
-                compobj -> close();
-                compobj = NULL;
-            }
-
-            streams_toc[streams_toc_actual].out_end_position = ftello(out);
-            streams_toc_actual++;
-        }
-
-        if (streams_toc[streams_toc_actual].compression && !compobj) {
-            int32_t compression_option = compression_level;
-            if (
-                (sector_tools_compression)streams_toc[streams_toc_actual].compression == C_LZMA &&
-                extreme_compression    
-            ) {
-                compression_option |= LZMA_PRESET_EXTREME;
-            }
-            compobj = new compressor(
-                (sector_tools_compression)streams_toc[streams_toc_actual].compression,
-                true,
-                compression_option
-            );
-            compobj -> set_output(comp_buffer, buffer_size);
-        }
-
-        // Select the compression depending of the stream type and the user options
-        sector_tools_compression current_compression;
-        if ((streams_toc[streams_toc_actual].type + 1) == STST_AUDIO) {
-            current_compression = audio_compression;
-        }
-        else {
-            current_compression = data_compression;
-        }
-
-        // Process the sectors count indicated in the toc
-        for (curtype_count = 0; curtype_count < sectors_toc[sectors_toc_actual].sector_count; curtype_count++) {
-            if (feof(in)){
-                printf("Unexpected EOF detected.\n");
-                printfileerror(in, infilename);
-                return_code = 1;
-                break;
-            }
-
-            fread(in_sector, 2352, 1, in);
-            // Compute the crc of the readed data 
-            input_edc = sTools.edc_compute(
-                input_edc,
-                in_sector,
-                2352
-            );
-
-            int8_t res;
-            // We will clean the sector to keep only the data that we want
-            uint16_t output_size = 0;
-            res = sTools.clean_sector(
-                out_sector,
-                in_sector,
-                (sector_tools_types)sectors_toc[sectors_toc_actual].mode,
-                output_size,
-                optimizations
-            );
-
-            if (res) {
-                printf("\nThere was an error cleaning the sector\n");
-                return_code = 1;
-                break;
-            }
-
-            sectors_type[sectors_toc[sectors_toc_actual].mode] += 1;
-
-            // Compress the sector using the selected compression (or none)
-            switch (current_compression) {
-            // No compression
-            case C_NONE:
-                fwrite(out_sector, output_size, 1, out);
-                if (ferror(out)) {
-                    printf("\nThere was an error writting the output file");
-                    return_code = 1;
-                    break;
-                }
-                break;
-
-            // Zlib compression
-            case C_ZLIB:
-            case C_LZMA:
-                size_t compress_buffer_left = 0;
-                // Current sector is the last stream sector
-                if ((current_sector+1) == streams_toc[streams_toc_actual].end_sector) {
-                    res = compobj -> compress(compress_buffer_left, out_sector, output_size, Z_FINISH);
-                }
-                else if (seekable && (sectors_per_block == 1 || !((current_sector + 1) % sectors_per_block))) {
-                    // A new compressor block is required
-                    res = compobj -> compress(compress_buffer_left, out_sector, output_size, Z_FULL_FLUSH);
-                }
-                else {
-                    res = compobj -> compress(compress_buffer_left, out_sector, output_size, Z_NO_FLUSH);
-                }
-
-                // If buffer is above 75% or is the last sector, write the data to the output and reset the state
-                if (compress_buffer_left < (buffer_size * 0.25) || (current_sector+1) == streams_toc[streams_toc_actual].end_sector) {
-                    fwrite(comp_buffer, buffer_size - compress_buffer_left, 1, out);
-                    if (ferror(out)) {
-                    printf("\nThere was an error writting the output file");
-                    return_code = 1;
-                    break;
-                }
-                    compobj -> set_output(comp_buffer, buffer_size);
-                }
-                break;
-            }
-
-            setcounter_encode(ftello(in));
-            // If we are not in end of file, sum a sector
-            if (ftello(in) != in_total_size) {
-                current_sector++;
-            }
-       }  
+    // Updating streams header
+    for (uint32_t i = 0; i < streams_script.size(); i++) {
+        streams_toc[i].out_end_position = streams_script[i].stream_data.out_end_position;
     }
-
-    // Close the compression object
-    if (compobj) {
-        compobj -> close();
-        compobj = NULL;
-    }
-
-    streams_toc[streams_toc_actual].out_end_position = ftello(out);
 
     // Add the CRC to the output file
     uint8_t crc[4];
@@ -762,18 +468,21 @@ static int8_t ecmify(
     fwrite(crc, 4, 1, out);
 
     // Rewrite the streams header to store the new data (end position in output file)
-    fseeko(out, 5 + sizeof(streams_toc_count) + sizeof(optimizations), SEEK_SET);
-    fwrite(streams_toc, streams_toc_count.count * sizeof(struct STREAM), 1, out);
+    fseeko(out, 5 + sizeof(optimizations) + sizeof(streams_toc_count), SEEK_SET);
+    // Write the streams header. The count is base 0, so one will be added for the calculation
+    fwrite(streams_toc, streams_toc_count.size, 1, out);
 
     // End Of TOC reached, so file should have be processed completly
     if (ftello(in) != in_total_size) {
         printf("\n\nThere was an error processing the input file...\n");
         printfileerror(in, infilename);
-        return_code = 1;
+        return ECMTOOL_FILE_READ_ERROR;
     }
 
     fseeko(out, 0, SEEK_END);
     summary(sectors_type, optimizations, sTools, ftello(out));
+
+    printf("Exiting...\n");
 
     //sTools.close();
     fclose(in);
@@ -791,7 +500,7 @@ static int8_t ecmify(
 }
 
 
-static int8_t unecmify(
+static ecmtool_return_code unecmify(
     const char* infilename,
     const char* outfilename,
     const bool force_rewrite
@@ -799,48 +508,40 @@ static int8_t unecmify(
     // IN/OUT files definition
     FILE* in  = NULL;
     FILE* out = NULL;
-    uint8_t return_code = 0;
+    ecmtool_return_code return_code = ECMTOOL_OK;
 
     if (!force_rewrite) {
         out = fopen(outfilename, "rb");
         if (out) {
-            printf("Error: %s exists; refusing to overwrite\n", outfilename);
+            printf("Error: %s exists; refusing to overwrite. Use the -f argument to force the overwrite.\n", outfilename);
             fclose(out);
-            return 1;
+            return ECMTOOL_FILE_WRITE_ERROR;
         }
-    }
-
-    // Buffers size
-    size_t buffer_size = ((size_t)(-1)) - 4095;
-    if((unsigned long)buffer_size > 0x40000lu) {
-        buffer_size = (size_t)0x40000lu;
     }
 
     // Buffers initialization
     // Allocate input buffer space
     char* in_buffer = NULL;
-    in_buffer = (char*) malloc(buffer_size);
+    in_buffer = (char*) malloc(BUFFER_SIZE);
     if(!in_buffer) {
         printf("Out of memory\n");
-        return 1;
+        return ECMTOOL_BUFFER_MEMORY_ERROR;
     }
     // Allocate output buffer space
     char* out_buffer = NULL;
-    out_buffer = (char*) malloc(buffer_size);
+    out_buffer = (char*) malloc(BUFFER_SIZE);
     if(!out_buffer) {
         printf("Out of memory\n");
-        return 1;
+        return ECMTOOL_BUFFER_MEMORY_ERROR;
     }
-    // Allocate compressor buffer if required
-    uint8_t* decomp_buffer = NULL;
 
     // Open input file
     in = fopen(infilename, "rb");
     if (!in) {
         printfileerror(in, infilename);
-        return 1;
+        return ECMTOOL_FILE_READ_ERROR;
     }
-    setvbuf(in, in_buffer, _IOFBF, buffer_size);
+    setvbuf(in, in_buffer, _IOFBF, BUFFER_SIZE);
     // Getting the input size to set the progress
     fseeko(in, 0, SEEK_END);
     size_t in_total_size = ftello(in);
@@ -851,38 +552,39 @@ static int8_t unecmify(
     out = fopen(outfilename, "wb");
     if (!in) {
         printfileerror(out, outfilename);
-        return 1;
+        return ECMTOOL_FILE_WRITE_ERROR;
     }
-    setvbuf(out, out_buffer, _IOFBF, buffer_size);
+    setvbuf(out, out_buffer, _IOFBF, BUFFER_SIZE);
 
     // Get the options used at file creation
-    optimization_options options;
-    fread(&options, sizeof(options), 1, in);
-
-    // CRC calculator
-    uint32_t original_edc = 0;
-    uint32_t output_edc = 0;
+    optimization_options optimizations;
+    fread(&optimizations, sizeof(optimizations), 1, in);
 
     // Streams TOC
     SEC_STR_SIZE streams_toc_count = {0, 0};
     fread(&streams_toc_count, sizeof(streams_toc_count), 1, in);
-    STREAM *streams_toc = new STREAM[streams_toc_count.count];
-    fread(streams_toc, sizeof(STREAM) * streams_toc_count.count, 1, in);
+    STREAM *streams_toc = new STREAM[streams_toc_count.count + 1];
+    if (sizeof(streams_toc) > streams_toc_count.size) {
+        // There was an error in the header
+        return ECMTOOL_CORRUPTED_HEADER;
+    }
+    fread(streams_toc, streams_toc_count.size, 1, in);
 
     // Sectors TOC
     SEC_STR_SIZE sectors_toc_count = {0, 0};
     fread(&sectors_toc_count, sizeof(sectors_toc_count), 1, in);
-    SECTOR *sectors_toc = new SECTOR[sectors_toc_count.count];
+    SECTOR *sectors_toc = new SECTOR[sectors_toc_count.count + 1];
     char* sectors_toc_c_buffer = (char*) malloc(sectors_toc_count.size);
     if(!sectors_toc_c_buffer) {
         printf("Out of memory\n");
-        return_code = 1;
+        return_code = ECMTOOL_BUFFER_MEMORY_ERROR;
     }
 
+    // Decompress the header
+    uint32_t out_size = (sectors_toc_count.count + 1) * sizeof(struct SECTOR);
     if (!return_code) {
         fread(sectors_toc_c_buffer, sectors_toc_count.size, 1, in);
 
-        uint32_t out_size = sectors_toc_count.count * sizeof(SECTOR);
         if (
             decompress_header(
                 (uint8_t*)sectors_toc,
@@ -892,168 +594,39 @@ static int8_t unecmify(
             )
         ) {
             printf("There was an error reading the header\n");
-            return_code = 1;
+            return_code = ECMTOOL_CORRUPTED_HEADER;
         }
     }
 
-    //
-    // Current sector type (run)
-    //
-    sector_tools_types curtype = STT_UNKNOWN; // not a valid type
-    uint32_t           current_sector = 1;
+    // Free the compressed buffer
+    if(sectors_toc_c_buffer) {
+        free(sectors_toc_c_buffer);
+    }
 
     // Initializing the Sector Tools object
     sector_tools sTools = sector_tools();
 
-    // Decompressor
-    compressor *decompobj = NULL;
+    // Convert the headers to an script to be easily followed by the decoder
+    std::vector<STREAM_SCRIPT> streams_script;
+    return_code = task_maker (
+        streams_toc,
+        streams_toc_count,
+        sectors_toc,
+        sectors_toc_count,
+        streams_script
+    );
 
-    // Sector buffer
-    uint8_t in_sector[2352];
-    uint8_t out_sector[2352];
-
-    // End Of Stream mark
-    bool end_of_stream = false;
-
-    //
-    // Starting the decoding part to generate the output file
-    //
-    uint32_t streams_toc_actual = 0;
-    for (uint32_t sectors_toc_actual = 0; sectors_toc_actual < sectors_toc_count.count; sectors_toc_actual++) {
-        if (return_code) { break; } // If there was an error, break the loop
-
-        // If the next sector correspond to the next stream, advance to it
-        if (current_sector == streams_toc[streams_toc_actual].end_sector) {
-            // New stream, new state. Reset the stream state
-            end_of_stream = false;
-            
-            // No flush required as the last sector should have been read
-            if (decompobj) {
-                decompobj -> close();
-                decompobj = NULL;
-            }
-
-            // Free the decomp buffer to avoid memory leak
-            if (decomp_buffer) {
-                free(decomp_buffer);
-            }
-            streams_toc_actual++;
-        }
-
-        // If stream is compressed and there's no decomp object, create a buffer in memory
-        // for the decompression, fill that buffet with the stream data and create the decomp 
-        // object.
-        if (streams_toc[streams_toc_actual].compression && !decompobj) {
-            // Create the decompression buffer
-            decomp_buffer = (uint8_t*) malloc(buffer_size);
-            if(!decomp_buffer) {
-                printf("Out of memory\n");
-                return_code = 1;
-                break;
-            }
-            // Check if stream size is smaller than the buffer size and use the smaller size as "to_read"
-            size_t to_read = buffer_size;
-            size_t stream_size = streams_toc[streams_toc_actual].out_end_position - ftello(in);
-            if (to_read > stream_size) {
-                to_read = stream_size;
-                end_of_stream = true;
-            }
-            // Read the data into the buffer
-            fread(decomp_buffer, to_read, 1, in);
-            // Create a new decompressor object
-            decompobj = new compressor((sector_tools_compression)streams_toc[streams_toc_actual].compression, false);
-            // Set the input buffer position as "input" in decompressor object
-            decompobj -> set_input(decomp_buffer, to_read);
-        }
-
-        // Process the sectors count indicated in the toc
-        for (uint32_t curtype_count = 0; curtype_count < sectors_toc[sectors_toc_actual].sector_count; curtype_count++) {
-            if (feof(in)){
-                printf("Unexpected EOF detected.\n");
-                printfileerror(in, infilename);
-                return_code = 1;
-                break;
-            }
-
-            uint16_t bytes_to_read = 0;
-            // Getting the sector size prior to read, to read the real sector size and avoid to fseek every time
-            sTools.encoded_sector_size(
-                (sector_tools_types)sectors_toc[sectors_toc_actual].mode,
-                bytes_to_read,
-                options
-            );
-
-            size_t decompress_buffer_left = 0;
-            switch (streams_toc[streams_toc_actual].compression) {
-            // No compression
-            case C_NONE:
-                fread(in_sector, bytes_to_read, 1, in);
-                break;
-
-            // Zlib compression
-            case C_ZLIB:
-            case C_LZMA:
-                // Decompress the sector data
-                decompobj -> decompress(in_sector, bytes_to_read, decompress_buffer_left, Z_SYNC_FLUSH);
-
-                // If not in end of stream and buffer is below 25%, read more data
-                // To keep the buffer always ready
-                if (!end_of_stream && decompress_buffer_left < (buffer_size * 0.25)) {
-                    // Move the left data to first bytes
-                    size_t position = buffer_size - decompress_buffer_left;
-                    memmove(decomp_buffer, decomp_buffer + position, decompress_buffer_left);
-
-                    // Calculate how much data can be readed
-                    size_t to_read = buffer_size - decompress_buffer_left;
-                    // If available space is bigger than data in stream, read only the stream data
-                    size_t stream_size = streams_toc[streams_toc_actual].out_end_position - ftello(in);
-                    if (to_read > stream_size) {
-                        to_read = stream_size;  
-                        // If left data is less than buffer space, then end_of_stream is reached
-                        end_of_stream = true;
-                    }
-                    // Fill the buffer with the stream data
-                    fread(decomp_buffer + decompress_buffer_left, to_read, 1, in);
-                    // Set again the input position to first byte in decomp_buffer and set the buffer size
-                    size_t input_size = decompress_buffer_left + to_read;
-                    decompobj -> set_input(decomp_buffer, input_size);
-                }
-
-                break;
-            }
-
-            // Regenerating the sector data
-            uint16_t bytes_readed = 0;
-            sTools.regenerate_sector(
-                out_sector,
-                in_sector,
-                (sector_tools_types)sectors_toc[sectors_toc_actual].mode,
-                current_sector - 1 + 0x96, // 0x96 is the first sector "time", equivalent to 00:02:00
-                bytes_readed,
-                options
-            );
-
-
-            // Writting the sector to output file
-            fwrite(out_sector, 2352, 1, out);
-            // Compute the crc of the written data 
-            output_edc = sTools.edc_compute(
-                output_edc,
-                out_sector,
-                2352
-            );
-
-            // Set the current position in file
-            setcounter_decode(ftello(in));
-            current_sector++;
-        }
+    if (return_code) {
+        return ECMTOOL_CORRUPTED_STREAM;
     }
 
-    // There is no more data in header. Next 4 bytes might be the CRC
-    // Reading it...
-    uint8_t buffer_edc[4];
-    fread(buffer_edc, 4, 1, in);
-    original_edc = sTools.get32lsb(buffer_edc);
+    return_code = disk_decode (
+        &sTools,
+        in,
+        out,
+        streams_script,
+        optimizations
+    );
 
     // Flushing data and closing files
     fflush(out);
@@ -1064,12 +637,6 @@ static int8_t unecmify(
     free(out_buffer);
     delete[] sectors_toc;
     delete[] streams_toc;
-    if (original_edc == output_edc) {
-        printf("\n\nFinished!\n");
-    }
-    else {
-        printf("\n\nWrong CRC!... Maybe the input file is damaged.\n");
-    }
     return return_code;
 }
 
@@ -1111,7 +678,7 @@ static void summary(uint32_t * sectors, optimization_options optimizations, sect
 
     // Calculate the size per sector type
     for (uint8_t i = 1; i < 11; i++) {
-        uint16_t bytes_to_read = 0;
+        size_t bytes_to_read = 0;
         // Getting the sector size prior to read, to read the real sector size and avoid to fseek every time
         sTools.encoded_sector_size(
             (sector_tools_types)i,
@@ -1137,28 +704,430 @@ static void summary(uint32_t * sectors, optimization_options optimizations, sect
     }
 
     printf("\n\n");
+    printf(" ECM cleanup sumpary\n");
+    printf("------------------------------------------------------------\n");
     printf(" Type               Sectors         In Size        Out Size\n");
     printf("------------------------------------------------------------\n");
-    printf("CDDA ............... %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[1], MB(sectors[1] * 2352), MB(sectors[1] * optimized_sector_sizes[1])); 
-    printf("CDDA Gap ........... %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[2], MB(sectors[2] * 2352), MB(sectors[2] * optimized_sector_sizes[2]));
-    printf("Mode 1 ............. %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[3], MB(sectors[3] * 2352), MB(sectors[3] * optimized_sector_sizes[3]));
-    printf("Mode 1 Gap ......... %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[4], MB(sectors[4] * 2352), MB(sectors[4] * optimized_sector_sizes[4]));
-    printf("Mode 2 ............. %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[5], MB(sectors[5] * 2352), MB(sectors[5] * optimized_sector_sizes[5]));
-    printf("Mode 2 Gap ......... %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[6], MB(sectors[6] * 2352), MB(sectors[6] * optimized_sector_sizes[6]));
-    printf("Mode 2 XA1 ......... %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[7], MB(sectors[7] * 2352), MB(sectors[7] * optimized_sector_sizes[7]));
-    printf("Mode 2 XA1 Gap ..... %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[8], MB(sectors[8] * 2352), MB(sectors[8] * optimized_sector_sizes[8]));
-    printf("Mode 2 XA2 ......... %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[9], MB(sectors[9] * 2352), MB(sectors[9] * optimized_sector_sizes[9]));
-    printf("Mode 2 XA2 Gap ..... %6d ...... %6.2fMb ...... %6.2fMb\n", sectors[10], MB(sectors[10] * 2352), MB(sectors[10] * optimized_sector_sizes[10]));
+    printf("CDDA ............... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[1], MB(sectors[1] * 2352), MB(sectors[1] * optimized_sector_sizes[1])); 
+    printf("CDDA Gap ........... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[2], MB(sectors[2] * 2352), MB(sectors[2] * optimized_sector_sizes[2]));
+    printf("Mode 1 ............. %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[3], MB(sectors[3] * 2352), MB(sectors[3] * optimized_sector_sizes[3]));
+    printf("Mode 1 Gap ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[4], MB(sectors[4] * 2352), MB(sectors[4] * optimized_sector_sizes[4]));
+    printf("Mode 2 ............. %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[5], MB(sectors[5] * 2352), MB(sectors[5] * optimized_sector_sizes[5]));
+    printf("Mode 2 Gap ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[6], MB(sectors[6] * 2352), MB(sectors[6] * optimized_sector_sizes[6]));
+    printf("Mode 2 XA1 ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[7], MB(sectors[7] * 2352), MB(sectors[7] * optimized_sector_sizes[7]));
+    printf("Mode 2 XA1 Gap ..... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[8], MB(sectors[8] * 2352), MB(sectors[8] * optimized_sector_sizes[8]));
+    printf("Mode 2 XA2 ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[9], MB(sectors[9] * 2352), MB(sectors[9] * optimized_sector_sizes[9]));
+    printf("Mode 2 XA2 Gap ..... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[10], MB(sectors[10] * 2352), MB(sectors[10] * optimized_sector_sizes[10]));
     printf("-------------------------------------------------------------\n");
     printf("Total .............. %6d ...... %6.2fMb ...... %6.2fMb\n", total_sectors, MB(total_size), MB(ecm_size));
+    printf("ECM reduction (input vs ecm) ..................... %2.2f%%\n", (1.0 - ((float)ecm_size / total_size)) * 100);
     printf("\n\n");
 
-    printf(" Sumary\n");
+    printf(" Compression Sumary\n");
     printf("-------------------------------------------------------------\n");
-    printf("ECM reduction (input vs ecm) ........... %2.2f%%\n", (1.0 - ((float)ecm_size / total_size)) * 100);
-    printf("Compressed size (output) ............... %3.2fMb\n", MB(compressed_size));
+    printf("Compressed size (output) ............... %3.2fMB\n", MB(compressed_size));
     printf("Compression ratio (ecm vs output)....... %2.2f%%\n", abs((1.0 - ((float)compressed_size / ecm_size)) * 100));
+    printf("\n\n");
+
+    printf(" Output summary\n");
+    printf("-------------------------------------------------------------\n");
     printf("Total reduction (input vs output) ...... %2.2f%%\n", abs((1.0 - ((float)compressed_size / total_size)) * 100));
+}
+
+
+static ecmtool_return_code disk_analyzer (
+    sector_tools * sTools,
+    FILE * image_file,
+    size_t image_file_size,
+    STREAM * streams_toc,
+    SEC_STR_SIZE * streams_toc_size,
+    SECTOR * sectors_toc,
+    SEC_STR_SIZE * sectors_toc_size,
+    sector_tools_compression data_compression,
+    sector_tools_compression audio_compression
+) {
+    // Sector count
+    size_t sectors_count = image_file_size / 2352;
+
+    // Current sector type and counters initialization
+    sector_tools_types curtype = STT_UNKNOWN; // not a valid type
+    // Bad stream type to create a new one at startup
+    sector_tools_stream_types curstreamtype = STST_UNKNOWN;
+
+    // Sector buffer
+    uint8_t in_sector[2352];
+
+    // Loop through all the sectors
+    for (size_t i = 1; i <= sectors_count; i++) {
+        // Read a sector
+        if (fread(in_sector, 2352, 1, image_file)) {
+            // Update the input file position
+            setcounter_analyze(ftello(image_file));
+
+            sector_tools_types detected_type = sTools->detect(in_sector);
+            if (curtype == STT_UNKNOWN) {
+                // Initialize the first sector type
+                sectors_toc[sectors_toc_size->count].mode = detected_type;
+                sectors_toc[sectors_toc_size->count].sector_count = 1;
+                curtype = detected_type;
+            }
+            else if (detected_type == curtype) {
+                // Sector type is the same so will be added
+                sectors_toc[sectors_toc_size->count].sector_count++;
+            }
+            else {
+                // Checking if the stream type is also different than the last one
+                sector_tools_stream_types stream_type = sTools->detect_stream(detected_type);
+
+                // Select the compression depending of the stream type and the user options
+                sector_tools_compression current_compression;
+                if (stream_type == STST_AUDIO) {
+                    current_compression = audio_compression;
+                }
+                else {
+                    current_compression = data_compression;
+                }
+
+                if (curstreamtype == STST_UNKNOWN) {
+                    // First stream position. Set the known stream data
+                    streams_toc[streams_toc_size->count].type = stream_type - 1;
+                    streams_toc[streams_toc_size->count].compression = current_compression;
+                    curstreamtype = stream_type;
+                }
+                else if (stream_type != curstreamtype) {
+                    // Set the end sector of the current stream (was the previous sector)
+                    streams_toc[streams_toc_size->count].end_sector = i - 1;
+                    // Add one stream to the count
+                    streams_toc_size->count++;
+                    streams_toc[streams_toc_size->count].type = stream_type - 1;
+                    curstreamtype = stream_type;
+                }
+
+                // Set the new sector toc position and initialize it
+                sectors_toc_size->count++;
+                sectors_toc[sectors_toc_size->count].mode = detected_type;
+                streams_toc[streams_toc_size->count].compression = current_compression;
+                sectors_toc[sectors_toc_size->count].sector_count = 1;
+                curtype = detected_type;
+            }
+        }
+        else {
+            // There was an eror reading the new sector
+            return ECMTOOL_FILE_READ_ERROR;
+        }
+    }
+
+    // Setting the last stream sector_count to total sectors
+    streams_toc[streams_toc_size->count].end_sector = sectors_count;
+
+    return ECMTOOL_OK;
+}
+
+
+static ecmtool_return_code disk_encode (
+    sector_tools * sTools,
+    FILE * image_in,
+    FILE * ecm_out,
+    std::vector<STREAM_SCRIPT> & streams_script,
+    uint8_t compression_level,
+    bool extreme_compression,
+    bool seekable,
+    uint8_t sectors_per_block,
+    optimization_options optimizations,
+    uint32_t * sectors_type,
+    uint32_t & input_edc
+) {
+    // Sectors buffers
+    uint8_t in_sector[2352];
+    uint8_t out_sector[2352];
+
+    // Stream processing
+    for (uint32_t i = 0; i < streams_script.size(); i++) {
+        // Compressor object
+        compressor *compobj = NULL;
+        // Buffer object
+        uint8_t* comp_buffer = NULL;
+
+        // Initialize the compressor and the buffer if required
+        if (streams_script[i].stream_data.compression) {
+            // Set compression level with extreme option if compression is LZMA
+            int32_t compression_option = compression_level;
+            if (
+                (sector_tools_compression)streams_script[i].stream_data.compression == C_LZMA &&
+                extreme_compression    
+            ) {
+                compression_option |= LZMA_PRESET_EXTREME;
+            }
+            compobj = new compressor(
+                (sector_tools_compression)streams_script[i].stream_data.compression,
+                true,
+                compression_option
+            );
+
+            // Initialize the compressor buffer
+            comp_buffer = (uint8_t*) malloc(BUFFER_SIZE);
+            if(!comp_buffer) {
+                printf("Out of memory\n");
+                return ECMTOOL_BUFFER_MEMORY_ERROR;
+            }
+
+            // Set the compressor buffer as output
+            size_t output_size = BUFFER_SIZE;
+            compobj -> set_output(comp_buffer, output_size);
+        }
+
+        // Walk through all the sector types in stream
+        for (uint32_t j = 0; j < streams_script[i].sectors_data.size(); j++) {
+            // Process the number of sectors of every type
+            for (uint32_t k = 0; k < streams_script[i].sectors_data[j].sector_count; k++) {
+                if (feof(image_in)){
+                    printf("Unexpected EOF detected.\n");
+                    return ECMTOOL_FILE_READ_ERROR;
+                }
+
+                fread(in_sector, 2352, 1, image_in);
+                // Compute the crc of the readed data 
+                input_edc = sTools->edc_compute(
+                    input_edc,
+                    in_sector,
+                    2352
+                );
+
+                // Current sector
+                uint32_t current_sector = ftello(image_in) / 2352;
+
+                // We will clean the sector to keep only the data that we want
+                uint16_t output_size = 0;
+                int8_t res = sTools->clean_sector(
+                    out_sector,
+                    in_sector,
+                    (sector_tools_types)streams_script[i].sectors_data[j].mode,
+                    output_size,
+                    optimizations
+                );
+
+                if (res) {
+                    printf("\nThere was an error cleaning the sector\n");
+                    return ECMTOOL_PROCESSING_ERROR;
+                }
+
+                sectors_type[streams_script[i].sectors_data[j].mode]++;
+
+                // Compress the sector using the selected compression (or none)
+                switch (streams_script[i].stream_data.compression) {
+                // No compression
+                case C_NONE:
+                    fwrite(out_sector, output_size, 1, ecm_out);
+                    if (ferror(ecm_out)) {
+                        printf("\nThere was an error writting the output file");
+                        return ECMTOOL_FILE_WRITE_ERROR;
+                    }
+                    break;
+
+                // Zlib compression
+                case C_ZLIB:
+                case C_LZMA:
+                case C_LZ4:
+                    size_t compress_buffer_left = 0;
+                    // Current sector is the last stream sector
+                    if (current_sector == streams_script[i].stream_data.end_sector) {
+                        res = compobj -> compress(compress_buffer_left, out_sector, output_size, Z_FINISH);
+                    }
+                    else if (seekable && (sectors_per_block == 1 || !((current_sector + 1) % sectors_per_block))) {
+                        // A new compressor block is required
+                        res = compobj -> compress(compress_buffer_left, out_sector, output_size, Z_FULL_FLUSH);
+                    }
+                    else {
+                        res = compobj -> compress(compress_buffer_left, out_sector, output_size, Z_NO_FLUSH);
+                    }
+
+                    // If buffer is above 75% or is the last sector, write the data to the output and reset the state
+                    if (compress_buffer_left < (BUFFER_SIZE * 0.25) || (current_sector) == streams_script[i].stream_data.end_sector) {
+                        fwrite(comp_buffer, BUFFER_SIZE - compress_buffer_left, 1, ecm_out);
+                        if (ferror(ecm_out)) {
+                            printf("\nThere was an error writting the output file");
+                            return ECMTOOL_FILE_WRITE_ERROR;
+                        }
+                        size_t output_size = BUFFER_SIZE;
+                        compobj -> set_output(comp_buffer, output_size);
+                    }
+                    break;
+                }
+
+                setcounter_encode(ftello(image_in));
+                // If we are not in end of file, sum a sector
+                current_sector++;
+            }
+        }
+
+        if (compobj) {
+            delete  compobj;
+            compobj = NULL;
+        }
+        if (comp_buffer) {
+            free(comp_buffer);
+        }
+    
+        streams_script[i].stream_data.out_end_position = ftello(ecm_out);
+    }
+
+    return ECMTOOL_OK;
+}
+
+
+static ecmtool_return_code disk_decode (
+    sector_tools * sTools,
+    FILE * ecm_in,
+    FILE * image_out,
+    std::vector<STREAM_SCRIPT> & streams_script,
+    optimization_options optimizations
+) {
+    // Sectors buffers
+    uint8_t in_sector[2352];
+    uint8_t out_sector[2352];
+
+    // Sector counter
+    uint32_t current_sector = 0;
+
+    // CRC calculator
+    uint32_t original_edc = 0;
+    uint32_t output_edc = 0;
+
+    // Stream processing
+    for (uint32_t i = 0; i < streams_script.size(); i++) {
+        // Compressor object
+        compressor *decompobj = NULL;
+        // Buffer object
+        uint8_t* decomp_buffer = NULL;
+
+        // Initialize the compressor and the buffer if required
+        if (streams_script[i].stream_data.compression) {
+            // Create the decompression buffer
+            decomp_buffer = (uint8_t*) malloc(BUFFER_SIZE);
+            if(!decomp_buffer) {
+                printf("Out of memory\n");
+                return ECMTOOL_BUFFER_MEMORY_ERROR;
+            }
+            // Check if stream size is smaller than the buffer size and use the smaller size as "to_read"
+            size_t to_read = BUFFER_SIZE;
+            size_t stream_size = streams_script[i].stream_data.out_end_position - ftello(ecm_in);
+            if (to_read > stream_size) {
+                to_read = stream_size;
+            }
+            // Read the data into the buffer
+            fread(decomp_buffer, to_read, 1, ecm_in);
+            // Create a new decompressor object
+            decompobj = new compressor((sector_tools_compression)streams_script[i].stream_data.compression, false);
+            // Set the input buffer position as "input" in decompressor object
+            decompobj -> set_input(decomp_buffer, to_read);
+        }
+
+        // Walk through all the sector types in stream
+        for (uint32_t j = 0; j < streams_script[i].sectors_data.size(); j++) {
+            // Process the number of sectors of every type
+            for (uint32_t k = 0; k < streams_script[i].sectors_data[j].sector_count; k++) {
+                if (feof(ecm_in)){
+                    printf("Unexpected EOF detected.\n");
+                    return ECMTOOL_FILE_READ_ERROR;
+                }
+
+                size_t bytes_to_read = 0;
+                // Getting the sector size prior to read, to read the real sector size and avoid to fseek every time
+                sTools->encoded_sector_size(
+                    (sector_tools_types)streams_script[i].sectors_data[j].mode,
+                    bytes_to_read,
+                    optimizations
+                );
+
+                size_t decompress_buffer_left = 0;
+                switch (streams_script[i].stream_data.compression) {
+                // No compression
+                case C_NONE:
+                    fread(in_sector, bytes_to_read, 1, ecm_in);
+                    break;
+
+                // Zlib/LZMA/LZ4 compression
+                case C_ZLIB:
+                case C_LZMA:
+                case C_LZ4:
+                    // Decompress the sector data
+                    decompobj -> decompress(in_sector, bytes_to_read, decompress_buffer_left, Z_SYNC_FLUSH);
+
+                    // If not in end of stream and buffer is below 25%, read more data
+                    // To keep the buffer always ready
+                    if (streams_script[i].stream_data.out_end_position > ftello(ecm_in) && decompress_buffer_left < (BUFFER_SIZE * 0.25)) {
+                        // Move the left data to first bytes
+                        size_t position = BUFFER_SIZE - decompress_buffer_left;
+                        memmove(decomp_buffer, decomp_buffer + position, decompress_buffer_left);
+
+                        // Calculate how much data can be readed
+                        size_t to_read = BUFFER_SIZE - decompress_buffer_left;
+                        // If available space is bigger than data in stream, read only the stream data
+                        size_t stream_size = streams_script[i].stream_data.out_end_position - ftello(ecm_in);
+                        if (to_read > stream_size) {
+                            to_read = stream_size;  
+                            // If left data is less than buffer space, then end_of_stream is reached
+                        }
+                        // Fill the buffer with the stream data
+                        fread(decomp_buffer + decompress_buffer_left, to_read, 1, ecm_in);
+                        // Set again the input position to first byte in decomp_buffer and set the buffer size
+                        size_t input_size = decompress_buffer_left + to_read;
+                        decompobj -> set_input(decomp_buffer, input_size);
+                    }
+                }
+
+                // Regenerating the sector data
+                uint16_t bytes_readed = 0;
+                sTools->regenerate_sector(
+                    out_sector,
+                    in_sector,
+                    (sector_tools_types)streams_script[i].sectors_data[j].mode,
+                    current_sector + 0x96, // 0x96 is the first sector "time", equivalent to 00:02:00
+                    bytes_readed,
+                    optimizations
+                );
+
+                // Writting the sector to output file
+                fwrite(out_sector, 2352, 1, image_out);
+                // Compute the crc of the written data 
+                output_edc = sTools->edc_compute(
+                    output_edc,
+                    out_sector,
+                    2352
+                );
+
+                // Set the current position in file
+                setcounter_decode(ftello(ecm_in));
+                current_sector++;
+            }
+        }
+
+        // Seek to the next stream start position:
+        fseeko(ecm_in, streams_script[i].stream_data.out_end_position, SEEK_SET);
+
+        if (decompobj) {
+            delete  decompobj;
+            decompobj = NULL;
+        }
+        if (decomp_buffer) {
+            free(decomp_buffer);
+        }
+    }
+
+    // There is no more data in header. Next 4 bytes might be the CRC
+    // Reading it...
+    uint8_t buffer_edc[4];
+    fread(buffer_edc, 4, 1, ecm_in);
+    original_edc = sTools->get32lsb(buffer_edc);
+
+    if (original_edc == output_edc) {
+        printf("\n\nFinished!\n");
+        return ECMTOOL_OK;
+    }
+    else {
+        printf("\n\nWrong CRC!... Maybe the input file is damaged.\n");
+        return ECMTOOL_PROCESSING_ERROR;
+    }
 }
 
 
@@ -1273,4 +1242,53 @@ int decompress_header (
            err == Z_NEED_DICT ? Z_DATA_ERROR  :
            err == Z_BUF_ERROR && strm.avail_out ? Z_DATA_ERROR :
            err;
+}
+
+
+/**
+ * @brief Converts an standard streams & sectors streams to a STREAM_SCRIPT vector. Also will check
+ *        if they are correct
+ * 
+ * 
+ * @param stream_header The streams header with their data
+ * @param stream_header_size The streams count in header
+ * @param sectors_header The sectors header whith their data
+ * @param sectors_header_size The sectors count in header
+ * @param streams_script The output vector which will contains the script
+ * @return int 
+ */
+static ecmtool_return_code task_maker (
+    STREAM * streams_toc,
+    SEC_STR_SIZE & streams_toc_count,
+    SECTOR * sectors_toc,
+    SEC_STR_SIZE & sectors_toc_count,
+    std::vector<STREAM_SCRIPT> & streams_script
+) {
+    size_t actual_sector = 0;
+    uint32_t actual_sector_pos = 0;
+
+    for (uint32_t i = 0; i <= streams_toc_count.count; i++) {
+        streams_script.push_back(STREAM_SCRIPT());
+        streams_script.back().stream_data = streams_toc[i];
+
+        while (actual_sector < streams_toc[i].end_sector) {
+            if (actual_sector_pos > sectors_toc_count.count) {
+                // The streams sectors doesn't fit the sectors count
+                // Headers could be corrupted
+                return ECMTOOL_CORRUPTED_STREAM;
+            }
+            // Append the sector data to the current stream
+            streams_script.back().sectors_data.push_back(sectors_toc[actual_sector_pos]);
+
+            actual_sector += sectors_toc[actual_sector_pos].sector_count;
+            actual_sector_pos++;
+        }
+
+        if (actual_sector > streams_toc[i].end_sector) {
+            // The actual sector must be equal to last sector in stream, otherwise could be corrupted
+            return ECMTOOL_PROCESSING_ERROR;
+        }
+    }
+
+    return ECMTOOL_OK;
 }

@@ -1,9 +1,29 @@
+////////////////////////////////////////////////////////////////////////////////
+//
+// Created by Daniel Carrasco at https://www.electrosoftcloud.com
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+//
+////////////////////////////////////////////////////////////////////////////////
+
 #include <stdexcept>
 #include "compressor.h"
 
 compressor::compressor(sector_tools_compression mode, bool is_compression, int32_t comp_level) {
     comp_mode = mode;
     compression = is_compression;
+    compression_level = comp_level;
     int ret;
     // Class initialzer
     switch(mode) {
@@ -20,6 +40,7 @@ compressor::compressor(sector_tools_compression mode, bool is_compression, int32
         }
         
         if (ret != Z_OK) {
+            printf("There was an error initializing the ZLIB encoder/decoder\n");
             //throw std::runtime_error("Error initializing the zlib compressor/decompressor.");
         }
 
@@ -37,11 +58,6 @@ compressor::compressor(sector_tools_compression mode, bool is_compression, int32
                 { LZMA_VLI_UNKNOWN, NULL },
             };
             ret = lzma_stream_encoder(&strm_lzma, filters, LZMA_CHECK_NONE); // CRC is already checked
-
-            // Return successfully if the initialization went fine.
-            if (ret != LZMA_OK) {
-                //throw std::runtime_error("Error initializing the lzma2 compressor/decompressor.");
-            }
         }
         else {
             ret = lzma_stream_decoder(
@@ -49,15 +65,31 @@ compressor::compressor(sector_tools_compression mode, bool is_compression, int32
                 UINT64_MAX,
                 LZMA_IGNORE_CHECK
             );
+        }
 
-            // Return successfully if the initialization went fine.
-            if (ret != LZMA_OK) {
-                //throw std::runtime_error("Error initializing the lzma2 compressor/decompressor.");
-            }
+        // Return successfully if the initialization went fine.
+        if (ret != LZMA_OK) {
+            printf("There was an error initializing LZMA encoder/decoder\n");
+            //throw std::runtime_error("Error initializing the lzma2 compressor/decompressor.");
         }
 
         break;
+
+    case C_LZ4:
+        if (is_compression) {
+            // We will create blocks of 1Mb and data will not be splitted between blocks.
+            strm_lz4 = new lzlib4((size_t)1048576, LZLIB4_INPUT_NOSPLIT, (int8_t)(1.34 * comp_level));
+        }
+        else {
+            strm_lz4 = new lzlib4();
+        }
+        break;
     }
+}
+
+// Destructor function that will call close()
+compressor::~compressor(void) {
+    close();
 }
 
 
@@ -74,6 +106,13 @@ int8_t compressor::set_input(uint8_t* in, size_t &in_size){
         case C_LZMA:
             strm_lzma.avail_in = in_size;
             strm_lzma.next_in = in;
+
+            return 0;
+            break;
+
+        case C_LZ4:
+            strm_lz4->strm.avail_in = in_size;
+            strm_lz4->strm.next_in = in;
 
             return 0;
             break;
@@ -104,6 +143,13 @@ int8_t compressor::set_output(uint8_t* out, size_t &out_size){
 
             return 0;
             break;
+
+        case C_LZ4:
+            strm_lz4->strm.avail_out = out_size;
+            strm_lz4->strm.next_out = out;
+
+            return 0;
+            break;
         }
 
         return 0;
@@ -115,16 +161,18 @@ int8_t compressor::set_output(uint8_t* out, size_t &out_size){
 }
 
 
-int8_t compressor::compress(size_t &out_size, uint8_t* in, size_t in_size, uint8_t flushmode){
+int8_t compressor::compress(size_t &out_size, uint8_t* in, size_t in_size, uint8_t flush_mode){
     if (compression) {
         int8_t return_code;
+        lzma_action flushmode_lzma = LZMA_RUN;
+        size_t processed;
 
         switch(comp_mode) {
         case C_ZLIB:
             strm_zlib.avail_in = in_size;
             strm_zlib.next_in = in;
 
-            return_code = deflate(&strm_zlib, flushmode);
+            return_code = deflate(&strm_zlib, flush_mode);
 
             out_size = strm_zlib.avail_out;
             return return_code;
@@ -134,8 +182,7 @@ int8_t compressor::compress(size_t &out_size, uint8_t* in, size_t in_size, uint8
             strm_lzma.avail_in = in_size;
             strm_lzma.next_in = in;
 
-            lzma_action flushmode_lzma = LZMA_RUN;
-            switch (flushmode) {
+            switch (flush_mode) {
                 case Z_FULL_FLUSH:
                     flushmode_lzma = LZMA_FULL_FLUSH;
                     break;
@@ -154,6 +201,15 @@ int8_t compressor::compress(size_t &out_size, uint8_t* in, size_t in_size, uint8
             out_size = strm_lzma.avail_out;
             return return_code;
             break;
+
+        case C_LZ4:
+            strm_lz4->strm.avail_in = in_size;
+            strm_lz4->strm.next_in = in;
+
+            strm_lz4->compress((lzlib4_flush_mode)flush_mode);
+
+            out_size = strm_lz4->strm.avail_out;
+            break;
         }
 
         return 0;
@@ -164,7 +220,7 @@ int8_t compressor::compress(size_t &out_size, uint8_t* in, size_t in_size, uint8
     }
 }
 
-int8_t compressor::decompress(uint8_t* out, size_t out_size, size_t &in_size, uint8_t flusmode){
+int8_t compressor::decompress(uint8_t* out, size_t & out_size, size_t &in_size, uint8_t flusmode){
     if (!compression) {
         int8_t return_code;
         switch(comp_mode) {
@@ -183,6 +239,15 @@ int8_t compressor::decompress(uint8_t* out, size_t out_size, size_t &in_size, ui
             return_code = lzma_code(&strm_lzma, LZMA_RUN);
 
             in_size = strm_lzma.avail_in;
+            return return_code;
+            break;
+
+        case C_LZ4:
+            strm_lz4->strm.avail_out = out_size;
+            strm_lz4->strm.next_out = out;
+            int return_code = strm_lz4->decompress_partial(false, false);
+
+            in_size = strm_lz4->strm.avail_in;
             return return_code;
             break;
         }
@@ -214,6 +279,11 @@ int8_t compressor::close(){
         strm_lzma = {};
         return 0;
         break;
+
+    case C_LZ4:
+        delete strm_lz4; //strm_lz4->close();
+        return 0;
+        break;
     }
 
     return -1;
@@ -228,6 +298,9 @@ size_t compressor::data_left_in() {
     case C_LZMA:
         return strm_lzma.avail_in;
         break;
+    case C_LZ4:
+        return strm_lz4->strm.avail_in;
+        break;
     }
 
     return -1;
@@ -241,6 +314,10 @@ size_t compressor::data_left_out() {
 
     case C_LZMA:
         return strm_lzma.avail_out;
+        break;
+    
+    case C_LZ4:
+        return strm_lz4->strm.avail_out;
         break;
     }
 
