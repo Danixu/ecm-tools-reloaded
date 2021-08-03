@@ -69,12 +69,12 @@ install:
 .PHONY: clean
 
 clean:
-	rm ecmtool.o
+	rm -f ecmtool.o
 	rm -Rf release
 	# Clean the zlib directory
 	cp makefile_zlib/Makefile.linux zlib/Makefile.linux
 	make -C zlib -f Makefile.linux clean
-	rm zlib/Makefile.linux
+	rm -f zlib/Makefile.linux
 	cp makefile_zlib/Makefile.win zlib/Makefile.win
 	make -C zlib -f Makefile.win clean
-	rm zlib/Makefile.win
+	rm -f zlib/Makefile.win
