@@ -10,3 +10,9 @@
 [submodule "lzlib4"]
 	path = lzlib4
 	url = https://github.com/Danixu/lzlib4.git
+[submodule "flac"]
+	path = flac
+	url = https://github.com/xiph/flac.git
+[submodule "flaczlib"]
+	path = flaczlib
+	url = https://github.com/Danixu/flaczlib.git

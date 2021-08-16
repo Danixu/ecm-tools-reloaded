@@ -91,6 +91,9 @@ int main(int argc, char** argv) {
                 else if (strcmp("lz4", optarg) == 0) {
                     audio_compression = C_LZ4;
                 }
+                else if (strcmp("flac", optarg) == 0) {
+                    audio_compression = C_FLAC;
+                }
                 else {
                     printf("Error: Unknown data compression mode: %s\n\n", optarg);
                     print_help();
@@ -275,6 +278,11 @@ int main(int argc, char** argv) {
             sectors_per_block
         );
     }
+
+    // Free the tempfilename resource
+    if (tempfilename) {
+        free(tempfilename);
+    }
 }
 
 
@@ -433,6 +441,11 @@ static ecmtool_return_code ecmify(
 
             // Reset the input file position
             fseeko(in, 0, SEEK_SET);
+        }
+
+        // Free the compressed buffer
+        if(sectors_toc_c_buffer) {
+            free(sectors_toc_c_buffer);
         }
     }
 
@@ -852,11 +865,13 @@ static ecmtool_return_code disk_encode (
         if (streams_script[i].stream_data.compression) {
             // Set compression level with extreme option if compression is LZMA
             int32_t compression_option = compression_level;
-            if (
-                (sector_tools_compression)streams_script[i].stream_data.compression == C_LZMA &&
-                extreme_compression    
-            ) {
-                compression_option |= LZMA_PRESET_EXTREME;
+            if (extreme_compression) {
+                if ((sector_tools_compression)streams_script[i].stream_data.compression == C_LZMA) {
+                    compression_option |= LZMA_PRESET_EXTREME;
+                }
+                else if ((sector_tools_compression)streams_script[i].stream_data.compression == C_FLAC) {
+                    compression_option |= FLACZLIB_EXTREME_COMPRESSION;
+                }
             }
             compobj = new compressor(
                 (sector_tools_compression)streams_script[i].stream_data.compression,
@@ -928,6 +943,7 @@ static ecmtool_return_code disk_encode (
                 case C_ZLIB:
                 case C_LZMA:
                 case C_LZ4:
+                case C_FLAC:
                     size_t compress_buffer_left = 0;
                     // Current sector is the last stream sector
                     if (current_sector == streams_script[i].stream_data.end_sector) {
@@ -1050,6 +1066,7 @@ static ecmtool_return_code disk_decode (
                 case C_ZLIB:
                 case C_LZMA:
                 case C_LZ4:
+                case C_FLAC:
                     // Decompress the sector data
                     decompobj -> decompress(in_sector, bytes_to_read, decompress_buffer_left, Z_SYNC_FLUSH);
 
