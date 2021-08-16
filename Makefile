@@ -20,7 +20,7 @@ ecmtool:
 	########## FLAC MAKE ##########
 	cd flac && bash autogen.sh && ./configure --enable-static --disable-xmms-plugin --disable-ogg --disable-oggtest --disable-examples --enable-shared=no --disable-cpplibs --disable-doxygen-docs
 	make -C flac clean
-	make -C flac -j$(nproc)
+	cd flac/src/libFLAC && make -j$(nproc)
 	########## END FLAC MAKE ##########
 
 	# Compile the Linux release
@@ -61,7 +61,7 @@ ecmtool.exe:
 	########## FLAC MAKE ##########
 	cd flac && bash autogen.sh && ./configure --host=x86_64-w64-mingw32 --enable-static --disable-xmms-plugin --disable-ogg --disable-oggtest --disable-examples --enable-shared=no --disable-cpplibs --disable-doxygen-docs
 	make -C flac clean
-	cd flac && make -j$(nproc)
+	cd flac/src/libFLAC && make -j$(nproc)
 	########## END FLAC MAKE ##########
 
 	# Compile the Win64 release
