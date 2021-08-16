@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Install Packages
-        run: sudo apt-get update && sudo apt-get install -y mingw-w64 zip libtool autopoint automake
+        run: sudo apt-get update && sudo apt-get install -y mingw-w64 zip libtool autopoint automake libtool-bin
       - name: Initializing submodules
         run: git submodule update --init
       - name: make
