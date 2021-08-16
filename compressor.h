@@ -24,6 +24,7 @@
 #include "lzma.h"
 #include "lz4hc.h"
 #include "lzlib4.h"
+#include "flaczlib.h"
 
 //
 // Stream types detectable by the class
@@ -61,6 +62,7 @@ class compressor {
         lzma_stream strm_lzma;
         lzma_options_lzma opt_lzma2;
         lzlib4 * strm_lz4 = NULL;
+        flaczlib * strm_flac = NULL;
         sector_tools_compression comp_mode;
         bool compression;
         int32_t compression_level;

@@ -84,6 +84,16 @@ compressor::compressor(sector_tools_compression mode, bool is_compression, int32
             strm_lz4 = new lzlib4();
         }
         break;
+
+    case C_FLAC:
+        if (is_compression) {
+            // We will create blocks of 1Mb and data will not be splitted between blocks.
+            strm_flac = new flaczlib(true, 2, 16, 44100, 0, comp_level);
+        }
+        else {
+            strm_flac = new flaczlib(false);
+        }
+        break;
     }
 }
 
@@ -113,6 +123,13 @@ int8_t compressor::set_input(uint8_t* in, size_t &in_size){
         case C_LZ4:
             strm_lz4->strm.avail_in = in_size;
             strm_lz4->strm.next_in = in;
+
+            return 0;
+            break;
+
+        case C_FLAC:
+            strm_flac->strm->avail_in = in_size;
+            strm_flac->strm->next_in = in;
 
             return 0;
             break;
@@ -147,6 +164,13 @@ int8_t compressor::set_output(uint8_t* out, size_t &out_size){
         case C_LZ4:
             strm_lz4->strm.avail_out = out_size;
             strm_lz4->strm.next_out = out;
+
+            return 0;
+            break;
+
+        case C_FLAC:
+            strm_flac->strm->avail_out = out_size;
+            strm_flac->strm->next_out = out;
 
             return 0;
             break;
@@ -210,6 +234,15 @@ int8_t compressor::compress(size_t &out_size, uint8_t* in, size_t in_size, uint8
 
             out_size = strm_lz4->strm.avail_out;
             break;
+
+        case C_FLAC:
+            strm_flac->strm->avail_in = in_size;
+            strm_flac->strm->next_in = in;
+
+            strm_flac->compress(in_size / 4, (flaczlib_flush_mode)flush_mode);
+
+            out_size = strm_flac->strm->avail_out;
+            break;
         }
 
         return 0;
@@ -225,31 +258,48 @@ int8_t compressor::decompress(uint8_t* out, size_t & out_size, size_t &in_size, 
         int8_t return_code;
         switch(comp_mode) {
         case C_ZLIB:
-            strm_zlib.avail_out = out_size;
-            strm_zlib.next_out = out;
-            return_code = inflate(&strm_zlib, flusmode);
+            {
+                strm_zlib.avail_out = out_size;
+                strm_zlib.next_out = out;
+                return_code = inflate(&strm_zlib, flusmode);
 
-            in_size = strm_zlib.avail_in;
-            return return_code;
-            break;
+                in_size = strm_zlib.avail_in;
+                return return_code;
+                break;
+            }
 
         case C_LZMA:
-            strm_lzma.avail_out = out_size;
-            strm_lzma.next_out = out;
-            return_code = lzma_code(&strm_lzma, LZMA_RUN);
+            {
+                strm_lzma.avail_out = out_size;
+                strm_lzma.next_out = out;
+                return_code = lzma_code(&strm_lzma, LZMA_RUN);
 
-            in_size = strm_lzma.avail_in;
-            return return_code;
-            break;
+                in_size = strm_lzma.avail_in;
+                return return_code;
+                break;
+            }
 
         case C_LZ4:
-            strm_lz4->strm.avail_out = out_size;
-            strm_lz4->strm.next_out = out;
-            int return_code = strm_lz4->decompress_partial(false, false);
+            {
+                strm_lz4->strm.avail_out = out_size;
+                strm_lz4->strm.next_out = out;
+                int return_code = strm_lz4->decompress_partial(false, -1);
 
-            in_size = strm_lz4->strm.avail_in;
-            return return_code;
-            break;
+                in_size = strm_lz4->strm.avail_in;
+                return return_code;
+                break;
+            }
+
+        case C_FLAC:
+            {
+                strm_flac->strm->avail_out = out_size;
+                strm_flac->strm->next_out = out;
+                int return_code = strm_flac->decompress_partial(false, -1);
+
+                in_size = strm_flac->strm->avail_in;
+                return return_code;
+                break;
+            }
         }
 
         return 0;
@@ -284,6 +334,11 @@ int8_t compressor::close(){
         delete strm_lz4; //strm_lz4->close();
         return 0;
         break;
+
+    case C_FLAC:
+        delete strm_flac; //strm_lz4->close();
+        return 0;
+        break;
     }
 
     return -1;
@@ -300,6 +355,9 @@ size_t compressor::data_left_in() {
         break;
     case C_LZ4:
         return strm_lz4->strm.avail_in;
+        break;
+    case C_FLAC:
+        return strm_flac->strm->avail_in;
         break;
     }
 
@@ -318,6 +376,9 @@ size_t compressor::data_left_out() {
     
     case C_LZ4:
         return strm_lz4->strm.avail_out;
+        break;
+    case C_FLAC:
+        return strm_flac->strm->avail_out;
         break;
     }
 
