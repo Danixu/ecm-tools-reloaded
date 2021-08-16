@@ -442,6 +442,11 @@ static ecmtool_return_code ecmify(
             // Reset the input file position
             fseeko(in, 0, SEEK_SET);
         }
+
+        // Free the compressed buffer
+        if(sectors_toc_c_buffer) {
+            free(sectors_toc_c_buffer);
+        }
     }
 
     // CRC calculation to check the decoded stream
