@@ -1,4 +1,4 @@
-COMP_OPT=-O2 -ffunction-sections -Wl,-gc-sections -s -Izlib -Ixz/src/liblzma/api/ -Lxz/src/liblzma/.libs/ -Lzlib -Ilz4/lib/ -Ilzlib4
+COMP_OPT=-O2 -ffunction-sections -Wl,-gc-sections -s -Izlib -Ixz/src/liblzma/api/ -Lxz/src/liblzma/.libs/ -Lzlib -Ilz4/lib/ -Ilzlib4 -Iflaczlib -Iflac/include
 
 all: ecmtool ecmtool.exe
 
@@ -13,13 +13,19 @@ ecmtool:
 	########## END ZLIB MAKE ##########
 
 	########## LZMA (XZ) MAKE ##########
-	cd xz && bash autogen.sh --no-po4a && ./configure --enable-static --disable-xz --disable-xzdec --disable-lzmainfo --disable-lzma-links --disable-scripts --disable-doc --disable-lzmadec --disable-shared
+	cd xz && bash autogen.sh --no-po4a && ./configure --enable-static --disable-xz --disable-xzdec --disable-lzmainfo --disable-lzma-links --disable-scripts --disable-doc --disable-lzmadec --disable-shared 
 	make -C xz -j$(nproc)
-	########## LZMA (XZ) MAKE ##########
+	########## END LZMA (XZ) MAKE ##########
+
+	########## FLAC MAKE ##########
+	cd flac && bash autogen.sh && ./configure --enable-static --disable-xmms-plugin --disable-ogg --disable-oggtest --disable-examples --enable-shared=no --disable-cpplibs --disable-doxygen-docs
+	make -C flac clean
+	make -C flac -j$(nproc)
+	########## END FLAC MAKE ##########
 
 	# Compile the Linux release
 	mkdir -p release/linux
-	g++ ${COMP_OPT} -o release/linux/$@ ecmtool.cpp compressor.cpp sector_tools.cpp -lzlinux -llzma lz4/lib/lz4hc.c lz4/lib/lz4.c lzlib4/lzlib4.cpp
+	g++ ${COMP_OPT} -o release/linux/$@ ecmtool.cpp compressor.cpp sector_tools.cpp -lzlinux -llzma lz4/lib/lz4hc.c lz4/lib/lz4.c lzlib4/lzlib4.cpp flaczlib/flaczlib.cpp flac/src/libFLAC/.libs/libFLAC-static.a
 
 	########## ZLIB CLEAN ##########
 	# Clean the zlib directory at end
@@ -30,6 +36,12 @@ ecmtool:
 	########## LZMA CLEAN ##########
 	make -C xz clean
 	########## END LZMA CLEAN ##########
+
+	########## FLAC CLEAN ##########
+	make -C flac clean
+	########## END FLAC CLEAN ##########
+
+	
 
 ecmtool.exe:
     ########## ZLIB MAKE ##########
@@ -46,9 +58,15 @@ ecmtool.exe:
 	make -C xz -j$(nproc)
 	########## LZMA (XZ) MAKE ##########
 
+	########## FLAC MAKE ##########
+	cd flac && bash autogen.sh && ./configure --host=x86_64-w64-mingw32 --enable-static --disable-xmms-plugin --disable-ogg --disable-oggtest --disable-examples --enable-shared=no --disable-cpplibs --disable-doxygen-docs
+	make -C flac clean
+	cd flac && make -j$(nproc)
+	########## END FLAC MAKE ##########
+
 	# Compile the Win64 release
 	mkdir -p release/win64
-	x86_64-w64-mingw32-g++ ${COMP_OPT} -o release/win64/$@ ecmtool.cpp compressor.cpp sector_tools.cpp -lzwindows -llzma lz4/lib/lz4hc.c lz4/lib/lz4.c lzlib4/lzlib4.cpp
+	x86_64-w64-mingw32-g++ ${COMP_OPT} -o release/win64/$@ ecmtool.cpp compressor.cpp sector_tools.cpp -lzwindows -llzma lz4/lib/lz4hc.c lz4/lib/lz4.c lzlib4/lzlib4.cpp flaczlib/flaczlib.cpp flac/src/libFLAC/.libs/libFLAC-static.a
 
 	########## ZLIB CLEAN ##########
 	# Clean the zlib directory at end
@@ -59,6 +77,10 @@ ecmtool.exe:
 	########## LZMA CLEAN ##########
 	make -C xz clean
 	########## END LZMA CLEAN ##########
+
+	########## FLAC CLEAN ##########
+	make -C flac clean
+	########## END FLAC CLEAN ##########
 
 .PHONY: install
 
