@@ -2,7 +2,7 @@
 //
 #define TITLE "ecmtool - Encoder/decoder for Error Code Modeler format, with advanced features"
 #define COPYR "Copyright (C) 2021 Daniel Carrasco"
-#define VERSI "2.2.0-alpha"
+#define VERSI "2.3.0-alpha"
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
