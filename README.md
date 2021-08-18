@@ -8,11 +8,11 @@ By Daniel Carrasco (https://www.electrosoftcloud.com)
 
 # Description
 
-This ECM Tool allows you to remove all recoverable data from CD-ROM sectors, reducing the image size about 20% without using compression (depending of sectors types). This will allow to read the data from it very fast, and also can be complemented with a compression tool like 7zip to reach a very high compression.
+This ECM Tool allows you to remove all recoverable data from CD-ROM sectors, reducing the image size about 20% without using compression (depending of sectors types). This will allow to read the data from it very fast, and also can be complemented with a compression tool like 7zip to reach higher compression ratios.
 
-This tool is completely loossless, so original data can be recovered without problem.
+This tool is completely loossless, so original data can be recovered without problems.
 
-In v2 versions internal compression was added, so external tools are not required anymore. ECM Tool Reloaded is also able to detect the stream type, so an Audio stream can be compressed using FLAC which compress much more than other compression methods like LZMA or ZLIB.
+In the v2 versions, internal compression was added and then external tools are not required anymore. ECM Tool Reloaded is also able to detect the stream type. This make possible to use FLAC compresison in an Audio stream, which compress much more than other compression methods like LZMA or ZLIB.
 
 # Compression tests
 
@@ -27,7 +27,7 @@ This tests were made using the original ECM tool made by Neill Colett, this ECM 
 
 As you can see, the ECM Tool Reloaded uncompressed size is improved a bit by removing more data and dummy sectors from the streams. The CDDA tracks in Firebugs have caused a poor reduction ratio in original ECM tool because it keeps all the sectors. Reloaded conversely removes the GAP data, so  reduction ratio is improved a bit.
 
-About the compressed versions, 7zip standalone compression is as expected, the worst of all. The compression ratio was improved by the Original ECM Tool thanks to the removed data. The Reloaded version improves notably the CDDA compression ratio thanks to the FLAC compression, but is similar to the Original ECM Tool + 7zip if the image doesn't contains any CDDA track (is even a bit worst). This maybe can be improved by using bigger blocks during compression step, but will need more memory for the process.
+About the compressed versions, the 7zip standalone compression is as expected the worst of all. The compression ratio if LZMA compressor was improved by the Original ECM Tool thanks to the removed data. The Reloaded version improves notably the CDDA compression ratio thanks to the FLAC compression, but is similar to the Original ECM Tool + 7zip if the image doesn't contains any CDDA track (it is even a bit worst). This maybe can be improved by using bigger blocks during the compression step, but will need more memory for the process.
 
 # Usage
 
