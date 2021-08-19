@@ -118,7 +118,7 @@ typedef unsigned __int32 uint32_t;
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void printfileerror(FILE* f, const char* name) {
+void printfileerror(FILE *f, const char *name) {
     printf("Error: ");
     if(name) { printf("%s: ", name); }
     printf("%s\n", f && feof(f) ? "Unexpected end-of-file" : strerror(errno));
@@ -159,6 +159,7 @@ enum ecmtool_return_code {
     ECMTOOL_OK = 0,
     ECMTOOL_FILE_READ_ERROR = INT_MIN,
     ECMTOOL_FILE_WRITE_ERROR,
+    ECMTOOL_HEADER_COMPRESSION_ERROR,
     ECMTOOL_BUFFER_MEMORY_ERROR,
     ECMTOOL_PROCESSING_ERROR,
     ECMTOOL_CORRUPTED_STREAM,
@@ -170,8 +171,8 @@ enum ecmtool_return_code {
 // Declare the functions
 void print_help();
 static ecmtool_return_code ecmify(
-    const char* infilename,
-    const char* outfilename,
+    const char *infilename,
+    const char *outfilename,
     const bool force_rewrite,
     sector_tools_compression data_compression,
     sector_tools_compression audio_compression,
@@ -181,59 +182,59 @@ static ecmtool_return_code ecmify(
     uint8_t sectors_per_block
 );
 static ecmtool_return_code unecmify(
-    const char* infilename,
-    const char* outfilename,
+    const char *infilename,
+    const char *outfilename,
     const bool force_rewrite
 );
 int compress_header (
-    uint8_t* dest,
+    uint8_t *dest,
     uint32_t &destLen,
-    uint8_t* source,
+    uint8_t *source,
     uint32_t sourceLen,
     int level
 );
 int decompress_header (
-    uint8_t* dest,
+    uint8_t *dest,
     uint32_t &destLen,
-    uint8_t* source,
+    uint8_t *source,
     uint32_t sourceLen
 );
 static ecmtool_return_code task_maker (
-    STREAM * streams_toc,
-    SEC_STR_SIZE & streams_toc_count,
-    SECTOR * sectors_toc,
-    SEC_STR_SIZE & sectors_toc_count,
-    std::vector<STREAM_SCRIPT> & streams_script
+    STREAM *streams_toc,
+    SEC_STR_SIZE &streams_toc_count,
+    SECTOR *sectors_toc,
+    SEC_STR_SIZE &sectors_toc_count,
+    std::vector<STREAM_SCRIPT> &streams_script
 );
 static ecmtool_return_code disk_analyzer (
-    sector_tools * sTools,
-    FILE * image_file,
+    sector_tools *sTools,
+    FILE *image_file,
     size_t image_file_size,
-    STREAM * streams_toc,
-    SEC_STR_SIZE * streams_toc_size,
-    SECTOR * sectors_toc,
-    SEC_STR_SIZE * sectors_toc_size,
+    STREAM *streams_toc,
+    SEC_STR_SIZE *streams_toc_size,
+    SECTOR *sectors_toc,
+    SEC_STR_SIZE *sectors_toc_size,
     sector_tools_compression data_compression,
     sector_tools_compression audio_compression
 );
 static ecmtool_return_code disk_encode (
-    sector_tools * sTools,
-    FILE * image_file,
-    FILE * emc_out,
-    std::vector<STREAM_SCRIPT> & streams_script,
+    sector_tools *sTools,
+    FILE *image_file,
+    FILE *emc_out,
+    std::vector<STREAM_SCRIPT> &streams_script,
     uint8_t compression_level,
     bool extreme_compression,
     bool seekable,
     uint8_t sectors_per_block,
     optimization_options optimizations,
-    uint32_t * sectors_type,
-    uint32_t & input_edc
+    uint32_t *sectors_type,
+    uint32_t &input_edc
 );
 static ecmtool_return_code disk_decode (
-    sector_tools * sTools,
-    FILE * ecm_in,
-    FILE * image_out,
-    std::vector<STREAM_SCRIPT> & streams_script,
+    sector_tools *sTools,
+    FILE *ecm_in,
+    FILE *image_out,
+    std::vector<STREAM_SCRIPT> &streams_script,
     optimization_options optimizations
 );
 static void resetcounter(off_t total);
@@ -244,8 +245,8 @@ static void setcounter_encode(off_t n);
 static void setcounter_decode(off_t n);
 
 static void summary (
-    uint32_t * sectors,
+    uint32_t *sectors,
     optimization_options optimizations,
-    sector_tools sTools,
+    sector_tools *sTools,
     size_t compressed_size
 );
