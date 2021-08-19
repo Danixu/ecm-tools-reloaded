@@ -63,6 +63,8 @@ int main(int argc, char** argv) {
     uint64_t temp_argument = 0;
     const char *errstr;
 
+    int return_code = 0;
+
     char ch;
     while ((ch = getopt_long(argc, argv, "i:o:a:d:c:esp:f", long_options, NULL)) != -1)
     {
@@ -263,10 +265,10 @@ int main(int argc, char** argv) {
     }
 
     if (decode) {
-        unecmify(infilename, outfilename, force_rewrite);
+        return_code = unecmify(infilename, outfilename, force_rewrite);
     }
     else {
-        ecmify(
+        return_code = ecmify(
             infilename,
             outfilename,
             force_rewrite,
@@ -283,6 +285,8 @@ int main(int argc, char** argv) {
     if (tempfilename) {
         free(tempfilename);
     }
+
+    return return_code;
 }
 
 
