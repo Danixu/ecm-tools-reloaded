@@ -128,28 +128,50 @@ void printfileerror(FILE *f, const char *name) {
 
 // Streams and sectors structs
 #pragma pack(push, 1)
-struct STREAM {
+struct stream {
     uint8_t type : 1;
     uint8_t compression : 3;
     uint32_t end_sector = 0;
     uint32_t out_end_position = 0;
 };
 
-struct SECTOR {
+struct sector {
     uint8_t mode : 4;
     uint32_t sector_count = 0;
 };
 #pragma pack(pop)
 
-struct SEC_STR_SIZE {
+struct sec_str_size {
     uint32_t count;
     uint32_t size;
 };
 
 // Struct for script vector
-struct STREAM_SCRIPT {
-    STREAM stream_data;
-    std::vector<SECTOR> sectors_data;
+struct stream_script {
+    stream stream_data;
+    std::vector<sector> sectors_data;
+};
+
+// Ecmify options struct
+struct ecm_options {
+    bool force_rewrite = false;
+    bool keep_output = false;
+    sector_tools_compression data_compression = C_NONE;
+    sector_tools_compression audio_compression = C_NONE;
+    uint8_t compression_level = 5;
+    bool extreme_compression = false;
+    bool seekable = false;
+    uint8_t sectors_per_block = SECTORS_PER_BLOCK;
+    optimization_options optimizations = (
+        OO_REMOVE_SYNC |
+        OO_REMOVE_ADDR |
+        OO_REMOVE_MODE |
+        OO_REMOVE_BLANKS |
+        OO_REMOVE_REDUNDANT_FLAG |
+        OO_REMOVE_ECC |
+        OO_REMOVE_EDC |
+        OO_REMOVE_GAP
+    );
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -173,18 +195,12 @@ void print_help();
 static ecmtool_return_code ecmify(
     const char *infilename,
     const char *outfilename,
-    const bool force_rewrite,
-    sector_tools_compression data_compression,
-    sector_tools_compression audio_compression,
-    uint8_t compression_level,
-    bool extreme_compression,
-    bool seekable,
-    uint8_t sectors_per_block
+    ecm_options *options
 );
 static ecmtool_return_code unecmify(
     const char *infilename,
     const char *outfilename,
-    const bool force_rewrite
+    ecm_options *options
 );
 int compress_header (
     uint8_t *dest,
@@ -200,33 +216,28 @@ int decompress_header (
     uint32_t sourceLen
 );
 static ecmtool_return_code task_maker (
-    STREAM *streams_toc,
-    SEC_STR_SIZE &streams_toc_count,
-    SECTOR *sectors_toc,
-    SEC_STR_SIZE &sectors_toc_count,
-    std::vector<STREAM_SCRIPT> &streams_script
+    stream *streams_toc,
+    sec_str_size &streams_toc_count,
+    sector *sectors_toc,
+    sec_str_size &sectors_toc_count,
+    std::vector<stream_script> &streams_script
 );
 static ecmtool_return_code disk_analyzer (
     sector_tools *sTools,
     FILE *image_file,
     size_t image_file_size,
-    STREAM *streams_toc,
-    SEC_STR_SIZE *streams_toc_size,
-    SECTOR *sectors_toc,
-    SEC_STR_SIZE *sectors_toc_size,
-    sector_tools_compression data_compression,
-    sector_tools_compression audio_compression
+    stream *streams_toc,
+    sec_str_size *streams_toc_size,
+    sector *sectors_toc,
+    sec_str_size *sectors_toc_size,
+    ecm_options *options
 );
 static ecmtool_return_code disk_encode (
     sector_tools *sTools,
     FILE *image_file,
     FILE *emc_out,
-    std::vector<STREAM_SCRIPT> &streams_script,
-    uint8_t compression_level,
-    bool extreme_compression,
-    bool seekable,
-    uint8_t sectors_per_block,
-    optimization_options optimizations,
+    std::vector<stream_script> &streams_script,
+    ecm_options *options,
     uint32_t *sectors_type,
     uint32_t &input_edc
 );
@@ -234,8 +245,8 @@ static ecmtool_return_code disk_decode (
     sector_tools *sTools,
     FILE *ecm_in,
     FILE *image_out,
-    std::vector<STREAM_SCRIPT> &streams_script,
-    optimization_options optimizations
+    std::vector<stream_script> &streams_script,
+    ecm_options *options
 );
 static void resetcounter(off_t total);
 static void encode_progress(void);
@@ -246,7 +257,7 @@ static void setcounter_decode(off_t n);
 
 static void summary (
     uint32_t *sectors,
-    optimization_options optimizations,
+    ecm_options *options,
     sector_tools *sTools,
     size_t compressed_size
 );
