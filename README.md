@@ -68,7 +68,7 @@ Optional options:
 
 # Changelog
 
-Changelog can be viewed in [CHANGELOG.md](CHANGELOG.md) file
+Changelog can be viewed in [CHANGELOG.md](docs/CHANGELOG.md) file
 
 # FAQ
 
