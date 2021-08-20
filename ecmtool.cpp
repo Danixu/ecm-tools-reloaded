@@ -498,7 +498,7 @@ static ecmtool_return_code ecmify(
 
     // End Of TOC reached, so file should have be processed completly
     if (ftello(in) != in_total_size) {
-        printf("\n\nThere was an error processing the input file...\n");
+        printf("\n\nThe input file was not fully readed...\n");
         printfileerror(in, infilename);
         return_code = ECMTOOL_FILE_READ_ERROR;
     }
@@ -535,15 +535,21 @@ static ecmtool_return_code ecmify(
         free(out_buffer);
     }
     // Delete the tocs data
-    delete[] sectors_toc;
-    delete[] streams_toc;
-    delete sTools;
+    if (sectors_toc) {
+        delete[] sectors_toc;
+    }
+    if (streams_toc) {
+        delete[] streams_toc;
+    }
+    if (sTools) {
+        delete sTools;
+    }
 
     if (!return_code) {
         printf("\n\nFinished!\n");
     }
     else {
-        printf("\n\nThere was an error processing the input file: %d", return_code);
+        printf("\n\nThere was an error processing the input file: %d\n\n", return_code);
         // We will remove the file if something went wrong
         if (!options->keep_output) {
             if (remove(outfilename)) {
@@ -726,16 +732,22 @@ static ecmtool_return_code unecmify(
     if (out_buffer) {
         free(out_buffer);
     }
-    delete[] sectors_toc;
-    delete[] streams_toc;
-    delete sTools;
+    if (sectors_toc) {
+        delete[] sectors_toc;
+    }
+    if (streams_toc) {
+        delete[] streams_toc;
+    }
+    if (sTools) {
+        delete sTools;
+    }
 
     // If something went wrong, inform the user and delete the output file
     if (!return_code) {
         printf("\n\nFinished!\n");
     }
     else {
-        printf("\n\nThere was an error processing the input file: %d", return_code);
+        printf("\n\nThere was an error processing the input file: %d\n\n", return_code);
         // We will remove the file if something went wrong
         if (!options->keep_output) {
             if (remove(outfilename)) {

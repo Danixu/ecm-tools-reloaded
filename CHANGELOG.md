@@ -1,8 +1,20 @@
 # Changelog
 
+### v2.3.1-alpha
+
+* Now if a CD-ROM image contains any wrong sector MSF (like PSX libcript protection), then MSF cleanup is disabled because the process will not be lossles if not.
+* Fixed a bug in lzma compression which makes the program to create bigger files. Was much more notizable in images with a lot of merged CDDA and data sectors (Medievil ECM file was 2gb+, which is much more than the original image).
+* If there was an error processing the file, then the output file will be removed (added an option to keep it).
+
+### v2.3.0-alpha
+
+* Added FLAC compression using flaczlib class which helps to make it in a similar way to zlib
+* Added FLAC repository as submodule and updated Makefile
+* Fixed some memory leaks
+
 ### v2.2.0-alpha
 
-* Added lz4 HC compression using a lzlib4 class which helps to make it similar to zlib
+* Added lz4 HC compression using a lzlib4 class which helps to make it in a similar way to zlib
 * Added lz4 repository as submódule and updated Makefile
 * Refactorized analisys, encodong and decoding processes
 * Fixed a bug in header write/read
