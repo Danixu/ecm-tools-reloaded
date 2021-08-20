@@ -864,6 +864,9 @@ static ecmtool_return_code disk_analyzer (
     // Sector buffer
     uint8_t in_sector[2352];
 
+    // Sector counter
+    uint32_t current_sector = 0;
+
     // Loop through all the sectors
     for (size_t i = 1; i <= sectors_count; i++) {
         // Read a sector
@@ -872,6 +875,29 @@ static ecmtool_return_code disk_analyzer (
             setcounter_analyze(ftello(image_file));
 
             sector_tools_types detected_type = sTools->detect(in_sector);
+
+            // Only check the MSF info in data sectors
+            if (detected_type != STT_CDDA && detected_type != STT_CDDA_GAP) {
+                // Check if MSF can be regenerated (libcrypt protection)
+                uint8_t time_data[3];
+                sTools->sector_to_time(time_data, current_sector + 0x96);
+                if (
+                    options->optimizations & OO_REMOVE_MSF &&
+                    (time_data[0] != in_sector[0x0C] ||
+                    time_data[1] != in_sector[0x0D] ||
+                    time_data[2] != in_sector[0x0E])
+                ) {
+                    // Sector contains wrong MSF, so it cannot be recovered in a lossless way
+                    // To avoid this problem, we will disable the sector MSF optimization
+                    printf("Disabled MSF optimization. current_sector: %d\n\n", current_sector);
+                    options->optimizations = (optimization_options)(options->optimizations & ~OO_REMOVE_MSF);
+                }
+            }
+
+            if (!(options->optimizations & OO_REMOVE_MSF)) {
+                printf("Sector type = %d\n", detected_type);
+            }
+
             if (curtype == STT_UNKNOWN) {
                 // Initialize the first sector type
                 sectors_toc[sectors_toc_size->count].mode = detected_type;
@@ -922,6 +948,8 @@ static ecmtool_return_code disk_analyzer (
             // There was an eror reading the new sector
             return ECMTOOL_FILE_READ_ERROR;
         }
+
+        current_sector++;
     }
 
     // Setting the last stream sector_count to total sectors

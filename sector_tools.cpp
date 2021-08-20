@@ -522,7 +522,7 @@ int8_t sector_tools::clean_sector_mode1(
         output_size += 0x0C;
     }
     // Address bytes
-    if (!(options & OO_REMOVE_ADDR)) {
+    if (!(options & OO_REMOVE_MSF)) {
         memcpy(out + output_size, sector + 0x0C, 0x03);
         output_size += 0x03;
     }
@@ -569,7 +569,7 @@ int8_t sector_tools::clean_sector_mode2(
         output_size += 0x0C;
     }
     // Address bytes
-    if (!(options & OO_REMOVE_ADDR)) {
+    if (!(options & OO_REMOVE_MSF)) {
         memcpy(out + output_size, sector + 0x0C, 0x03);
         output_size += 0x03;
     }
@@ -601,7 +601,7 @@ int8_t sector_tools::clean_sector_mode2_xa1(
         output_size += 0x0C;
     }
     // Address bytes
-    if (!(options & OO_REMOVE_ADDR)) {
+    if (!(options & OO_REMOVE_MSF)) {
         memcpy(out + output_size, sector + 0x0C, 0x03);
         output_size += 0x03;
     }
@@ -652,7 +652,7 @@ int8_t sector_tools::clean_sector_mode2_xa2(
         output_size += 0x0C;
     }
     // Address bytes
-    if (!(options & OO_REMOVE_ADDR)) {
+    if (!(options & OO_REMOVE_MSF)) {
         memcpy(out + output_size, sector + 0x0C, 0x03);
         output_size += 0x03;
     }
@@ -982,7 +982,7 @@ int8_t sector_tools::regenerate_sector(
         }
         current_pos += 0x0C;
         // Address bytes
-        if (!(options & OO_REMOVE_ADDR)) {
+        if (!(options & OO_REMOVE_MSF)) {
             memcpy(out + current_pos, sector + bytes_readed, 0x03);
             bytes_readed += 0x03;
         }
@@ -1047,7 +1047,7 @@ int8_t sector_tools::encoded_sector_size(
                 output_size += 0x0C;
             }
             // Address bytes
-            if (!(options & OO_REMOVE_ADDR)) {
+            if (!(options & OO_REMOVE_MSF)) {
                 output_size += 0x03;
             }
             // Mode bytes
@@ -1079,7 +1079,7 @@ int8_t sector_tools::encoded_sector_size(
                 output_size += 0x0C;
             }
             // Address bytes
-            if (!(options & OO_REMOVE_ADDR)) {
+            if (!(options & OO_REMOVE_MSF)) {
                 output_size += 0x03;
             }
             // Mode bytes
@@ -1099,7 +1099,7 @@ int8_t sector_tools::encoded_sector_size(
                 output_size += 0x0C;
             }
             // Address bytes
-            if (!(options & OO_REMOVE_ADDR)) {
+            if (!(options & OO_REMOVE_MSF)) {
                 output_size += 0x03;
             }
             // Mode bytes
@@ -1134,7 +1134,7 @@ int8_t sector_tools::encoded_sector_size(
                 output_size += 0x0C;
             }
             // Address bytes
-            if (!(options & OO_REMOVE_ADDR)) {
+            if (!(options & OO_REMOVE_MSF)) {
                 output_size += 0x03;
             }
             // Mode bytes

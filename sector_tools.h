@@ -43,7 +43,7 @@
 // Mode 1
 // -----------------------------------------------------
 //        0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
-// 0000h 00 FF FF FF FF FF FF FF FF FF FF 00 [-ADDR-] 01
+// 0000h 00 FF FF FF FF FF FF FF FF FF FF 00 [-MSF -] 01
 // 0010h [---DATA...
 // ...
 // 0800h                                     ...DATA---]
@@ -55,7 +55,7 @@
 // Mode 2: This mode is not widely used
 // -----------------------------------------------------
 //        0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
-// 0000h 00 FF FF FF FF FF FF FF FF FF FF 00 [-ADDR-] 02
+// 0000h 00 FF FF FF FF FF FF FF FF FF FF 00 [-MSF -] 02
 // 0010h [---DATA...
 // ...
 // 0920h                                     ...DATA---]
@@ -64,7 +64,7 @@
 // Mode 2 (XA), form 1
 // -----------------------------------------------------
 //        0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
-// 0000h 00 FF FF FF FF FF FF FF FF FF FF 00 [-ADDR-] 02
+// 0000h 00 FF FF FF FF FF FF FF FF FF FF 00 [-MSF -] 02
 // 0010h [--FLAGS--] [--FLAGS--] [---DATA...
 // ...
 // 0810h             ...DATA---] [---EDC---] [---ECC...
@@ -75,13 +75,13 @@
 // Mode 2 (XA), form 2
 // -----------------------------------------------------
 //        0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
-// 0000h 00 FF FF FF FF FF FF FF FF FF FF 00 [-ADDR-] 02
+// 0000h 00 FF FF FF FF FF FF FF FF FF FF 00 [-MSF -] 02
 // 0010h [--FLAGS--] [--FLAGS--] [---DATA...
 // ...
 // 0920h                         ...DATA---] [---EDC---]
 // -----------------------------------------------------
 //
-// ADDR:  Sector address, encoded as minutes:seconds:frames in BCD
+// MSF:  Sector address, encoded as minutes:seconds:frames in BCD
 // FLAGS: Used in Mode 2 (XA) sectors describing the type of sector; repeated
 //        twice for redundancy
 // DATA:  Area of the sector which contains the actual data itself
@@ -136,7 +136,7 @@ enum sector_tools_stream_types : uint8_t {
 enum optimization_options : uint8_t {
     OO_NONE                  = 0,    // Just copy the input. Surelly will not be used
     OO_REMOVE_SYNC           = 1, // Remove sync bytes (a.k.a first 12 bytes)
-    OO_REMOVE_ADDR           = 1<<1, // Remove the ADDR bytes
+    OO_REMOVE_MSF           = 1<<1, // Remove the MSF bytes
     OO_REMOVE_MODE           = 1<<2, // Remove the MODE byte
     OO_REMOVE_BLANKS         = 1<<3, // If sector type is a GAP, remove the data
     OO_REMOVE_REDUNDANT_FLAG = 1<<4, // Remove the redundant copy of FLAG bytes in Mode 2 XA sectors
@@ -298,6 +298,10 @@ class sector_tools {
             size_t& output_size,
             optimization_options options
         );
+        static void sector_to_time(
+            uint8_t* out,
+            uint32_t sector_number
+        );
 
         // Public attributes
         int8_t last_sector_type = -1; 
@@ -333,10 +337,6 @@ class sector_tools {
             const uint8_t *address,
             const uint8_t *data,
             uint8_t *ecc
-        );
-        void sector_to_time(
-            uint8_t* out,
-            uint32_t sector_number
         );
 
         // Private attributes

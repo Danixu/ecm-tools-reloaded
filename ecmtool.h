@@ -164,7 +164,7 @@ struct ecm_options {
     uint8_t sectors_per_block = SECTORS_PER_BLOCK;
     optimization_options optimizations = (
         OO_REMOVE_SYNC |
-        OO_REMOVE_ADDR |
+        OO_REMOVE_MSF |
         OO_REMOVE_MODE |
         OO_REMOVE_BLANKS |
         OO_REMOVE_REDUNDANT_FLAG |
