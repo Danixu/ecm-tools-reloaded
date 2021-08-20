@@ -894,10 +894,6 @@ static ecmtool_return_code disk_analyzer (
                 }
             }
 
-            if (!(options->optimizations & OO_REMOVE_MSF)) {
-                printf("Sector type = %d\n", detected_type);
-            }
-
             if (curtype == STT_UNKNOWN) {
                 // Initialize the first sector type
                 sectors_toc[sectors_toc_size->count].mode = detected_type;
@@ -1238,7 +1234,7 @@ static ecmtool_return_code disk_decode (
         }
 
         // Seek to the next stream start position:
-        fseeko(ecm_in, streams_script[i].stream_data.out_end_position, SEEK_SET);
+        //fseeko(ecm_in, streams_script[i].stream_data.out_end_position, SEEK_SET);
 
         if (decompobj) {
             delete  decompobj;

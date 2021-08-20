@@ -219,7 +219,7 @@ int8_t compressor::compress(size_t &out_size, uint8_t* in, size_t in_size, uint8
             return_code = lzma_code(&strm_lzma, flushmode_lzma);
             
             if (return_code == LZMA_STREAM_END) {
-                return LZMA_OK;
+                return_code = LZMA_OK;
             }
 
             out_size = strm_lzma.avail_out;
