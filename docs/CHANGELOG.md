@@ -1,5 +1,11 @@
 # Changelog
 
+### v2.3.2-alpha
+
+* Now the program disables de redundant FLAG cleanup if cannot be recovered on decoding. Some games copy protections includes wrong redundant FLAG.
+* Added a new sector mode to allow to detect data sectors with an undetermined mode (used in copy protections)
+* Fixed a segmentation fault problem using the FLAC compressor on some games.
+
 ### v2.3.1-alpha
 
 * Now if a CD-ROM image contains any wrong sector MSF (like PSX libcript protection), then MSF cleanup is disabled because the process will not be lossles if not.

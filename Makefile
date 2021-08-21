@@ -1,4 +1,12 @@
-COMP_OPT=-O2 -ffunction-sections -Wl,-gc-sections -s -Izlib -Ixz/src/liblzma/api/ -Lxz/src/liblzma/.libs/ -Lzlib -Ilz4/lib/ -Ilzlib4 -Iflaczlib -Iflac/include
+COMP_OPT=-ffunction-sections -Wl,-gc-sections -Izlib -Ixz/src/liblzma/api/ -Lxz/src/liblzma/.libs/ -Lzlib -Ilz4/lib/ -Ilzlib4 -Iflaczlib -Iflac/include
+COMP_OPT_LINUX=
+
+ifeq ($(ECM_DEBUG), true)
+	COMP_OPT+= -g
+	COMP_OPT_LINUX+= -fsanitize=address
+else
+	COMP_OPT+= -O2 -s
+endif
 
 all: ecmtool ecmtool.exe
 
@@ -25,7 +33,7 @@ ecmtool:
 
 	# Compile the Linux release
 	mkdir -p release/linux
-	g++ ${COMP_OPT} -o release/linux/$@ ecmtool.cpp compressor.cpp sector_tools.cpp -lzlinux -llzma lz4/lib/lz4hc.c lz4/lib/lz4.c lzlib4/lzlib4.cpp flaczlib/flaczlib.cpp flac/src/libFLAC/.libs/libFLAC-static.a
+	g++ ${COMP_OPT} ${COMP_OPT_LINUX} -o release/linux/$@ ecmtool.cpp compressor.cpp sector_tools.cpp -lzlinux -llzma lz4/lib/lz4hc.c lz4/lib/lz4.c lzlib4/lzlib4.cpp flaczlib/flaczlib.cpp flac/src/libFLAC/.libs/libFLAC-static.a
 
 	########## ZLIB CLEAN ##########
 	# Clean the zlib directory at end
