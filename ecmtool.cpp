@@ -888,7 +888,9 @@ static ecmtool_return_code disk_analyzer (
 
             sector_tools_types detected_type = sTools->detect(in_sector);
 
-            // Only check the MSF info in data sectors
+            printf("Detected sector type: %d\n", detected_type);
+
+            // Only check the sector info in data sectors
             if (detected_type != STT_CDDA && detected_type != STT_CDDA_GAP) {
                 // Check if MSF can be regenerated (libcrypt protection)
                 uint8_t time_data[3];
@@ -901,8 +903,30 @@ static ecmtool_return_code disk_analyzer (
                 ) {
                     // Sector contains wrong MSF, so it cannot be recovered in a lossless way
                     // To avoid this problem, we will disable the sector MSF optimization
-                    printf("Disabled MSF optimization. current_sector: %d\n\n", current_sector);
+                    //printf("Disabled MSF optimization. current_sector: %d\n\n", current_sector);
                     options->optimizations = (optimization_options)(options->optimizations & ~OO_REMOVE_MSF);
+                }
+
+                // Check if redundant FLAG can be regenerated (Only Mode 2 XA modes)
+                if (
+                    (
+                        detected_type == STT_MODE2_1 ||
+                        detected_type == STT_MODE2_1_GAP ||
+                        detected_type == STT_MODE2_2 ||
+                        detected_type == STT_MODE2_2_GAP
+                    ) &&
+                    options->optimizations & OO_REMOVE_REDUNDANT_FLAG &&
+                    (
+                        in_sector[0x10] != in_sector[0x14] ||
+                        in_sector[0x11] != in_sector[0x15] ||
+                        in_sector[0x12] != in_sector[0x16] ||
+                        in_sector[0x13] != in_sector[0x17]
+                    )
+                ) {
+                    // Sector contains wrong subheader redundancy, so it cannot be recovered in a lossless way
+                    // To avoid this problem, we will disable the sector redundant FLAG removal
+                    //printf("Disabled redundant FLAG. current_sector: %d\n\n", current_sector);
+                    options->optimizations = (optimization_options)(options->optimizations & ~OO_REMOVE_REDUNDANT_FLAG);
                 }
             }
 

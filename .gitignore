@@ -35,3 +35,6 @@ release/
 .vscode/
 *.txt
 test*
+
+# Google Docs files
+**.gsheet
