@@ -55,7 +55,6 @@ int main(int argc, char **argv) {
 
     // temporal variables for options parsing
     uint64_t temp_argument = 0;
-    const char *errstr;
 
     int return_code = 0;
 
@@ -332,7 +331,7 @@ static ecmtool_return_code ecmify(
     char *sectors_toc_c_buffer;
 
     // Sectors sumary
-    uint32_t sectors_type[11] = {};
+    uint32_t sectors_type_sumary[12] = {};
 
     // Output CRC
     uint8_t crc[4];
@@ -389,11 +388,6 @@ static ecmtool_return_code ecmify(
     }
     setvbuf(out, out_buffer, _IOFBF, BUFFER_SIZE);
 
-    // Sectors TOC
-    sectors_toc = new sector[0xFFFFF];
-    // Streams TOC
-    streams_toc = new stream[0xFFFFF];
-
     // Sector Tools object
     sTools = new sector_tools();
 
@@ -401,20 +395,31 @@ static ecmtool_return_code ecmify(
         sTools,
         in,
         in_total_size,
-        streams_toc,
-        &streams_toc_count,
-        sectors_toc,
-        &sectors_toc_count,
+        streams_script,
         options
     );
     if (return_code) {
         goto exit_ecmify;
     }
+    //print_task(streams_script);
 
-    // Convert the headers to an script to be easily followed by the encoder
-    return_code = task_maker (
+    // Convert the task vector to header format wich will be stored in file
+    streams_toc = new stream[streams_script.size()];
+    return_code = task_to_streams_header (
         streams_toc,
         streams_toc_count,
+        streams_script
+    );
+    if (return_code) {
+        goto exit_ecmify;
+    }
+
+    sectors_toc = new sector[0xFFFFF];
+    if (!sectors_toc) {
+        printf("There was an error reserving the memory for the sectors toc.\n");
+        goto exit_ecmify;
+    }
+    return_code = task_to_sectors_header (
         sectors_toc,
         sectors_toc_count,
         streams_script
@@ -424,7 +429,7 @@ static ecmtool_return_code ecmify(
     }
 
     // Compress the sectors header.  Sectors count is base 0, so one will be added to the size calculation
-    sectors_toc_size = (sectors_toc_count.count + 1) * sizeof(struct sector);
+    sectors_toc_size = sectors_toc_count.count * sizeof(struct sector);
     sectors_toc_c_buffer = (char*) malloc(sectors_toc_size * 2);
     if(!sectors_toc_c_buffer) {
         printf("Out of memory\n");
@@ -435,6 +440,7 @@ static ecmtool_return_code ecmify(
     {
         uint32_t compressed_size = sectors_toc_size * 2;
         if (compress_header((uint8_t*)sectors_toc_c_buffer, compressed_size, (uint8_t*)sectors_toc, sectors_toc_size, 9)) {
+            printf("There was an error compressing the output header.\n");
             return_code = ECMTOOL_HEADER_COMPRESSION_ERROR;
             goto exit_ecmify;
         }
@@ -475,7 +481,7 @@ static ecmtool_return_code ecmify(
         out,
         streams_script,
         options,
-        sectors_type,
+        sectors_type_sumary,
         input_edc
     );
     if (return_code) {
@@ -508,7 +514,7 @@ static ecmtool_return_code ecmify(
 
     fseeko(out, 0, SEEK_END);
     summary(
-        sectors_type,
+        sectors_type_sumary,
         options,
         sTools,
         ftello(out)
@@ -649,6 +655,7 @@ static ecmtool_return_code unecmify(
     streams_toc = new stream[streams_toc_count.count + 1];
     if (sizeof(streams_toc) > streams_toc_count.size) {
         // There was an error in the header
+        printf("Corrupted header.\n");
         return_code = ECMTOOL_CORRUPTED_HEADER;
         goto exit_unecmify;
     }
@@ -832,12 +839,13 @@ static void summary(uint32_t *sectors, ecm_options *options, sector_tools *sTool
     printf("CDDA Gap ........... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[2], MB(sectors[2] * 2352), MB(sectors[2] * optimized_sector_sizes[2]));
     printf("Mode 1 ............. %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[3], MB(sectors[3] * 2352), MB(sectors[3] * optimized_sector_sizes[3]));
     printf("Mode 1 Gap ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[4], MB(sectors[4] * 2352), MB(sectors[4] * optimized_sector_sizes[4]));
-    printf("Mode 2 ............. %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[5], MB(sectors[5] * 2352), MB(sectors[5] * optimized_sector_sizes[5]));
-    printf("Mode 2 Gap ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[6], MB(sectors[6] * 2352), MB(sectors[6] * optimized_sector_sizes[6]));
-    printf("Mode 2 XA1 ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[7], MB(sectors[7] * 2352), MB(sectors[7] * optimized_sector_sizes[7]));
-    printf("Mode 2 XA1 Gap ..... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[8], MB(sectors[8] * 2352), MB(sectors[8] * optimized_sector_sizes[8]));
-    printf("Mode 2 XA2 ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[9], MB(sectors[9] * 2352), MB(sectors[9] * optimized_sector_sizes[9]));
-    printf("Mode 2 XA2 Gap ..... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[10], MB(sectors[10] * 2352), MB(sectors[10] * optimized_sector_sizes[10]));
+    printf("Mode 1 Gap ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[4], MB(sectors[5] * 2352), MB(sectors[5] * optimized_sector_sizes[5]));
+    printf("Mode 2 ............. %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[5], MB(sectors[6] * 2352), MB(sectors[6] * optimized_sector_sizes[6]));
+    printf("Mode 2 Gap ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[6], MB(sectors[7] * 2352), MB(sectors[7] * optimized_sector_sizes[7]));
+    printf("Mode 2 XA1 ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[7], MB(sectors[8] * 2352), MB(sectors[8] * optimized_sector_sizes[8]));
+    printf("Mode 2 XA1 Gap ..... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[8], MB(sectors[9] * 2352), MB(sectors[9] * optimized_sector_sizes[9]));
+    printf("Mode 2 XA2 ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[9], MB(sectors[10] * 2352), MB(sectors[10] * optimized_sector_sizes[10]));
+    printf("Mode 2 XA2 Gap ..... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[10], MB(sectors[10] * 2352), MB(sectors[11] * optimized_sector_sizes[11]));
     printf("-------------------------------------------------------------\n");
     printf("Total .............. %6d ...... %6.2fMb ...... %6.2fMb\n", total_sectors, MB(total_size), MB(ecm_size));
     printf("ECM reduction (input vs ecm) ..................... %2.2f%%\n", (1.0 - ((float)ecm_size / total_size)) * 100);
@@ -859,19 +867,11 @@ static ecmtool_return_code disk_analyzer (
     sector_tools *sTools,
     FILE *image_file,
     size_t image_file_size,
-    stream *streams_toc,
-    sec_str_size *streams_toc_size,
-    sector *sectors_toc,
-    sec_str_size *sectors_toc_size,
+    std::vector<stream_script> &streams_script,
     ecm_options *options
 ) {
     // Sector count
     size_t sectors_count = image_file_size / 2352;
-
-    // Current sector type and counters initialization
-    sector_tools_types curtype = STT_UNKNOWN; // not a valid type
-    // Bad stream type to create a new one at startup
-    sector_tools_stream_types curstreamtype = STST_UNKNOWN;
 
     // Sector buffer
     uint8_t in_sector[2352];
@@ -880,15 +880,16 @@ static ecmtool_return_code disk_analyzer (
     uint32_t current_sector = 0;
 
     // Loop through all the sectors
-    for (size_t i = 1; i <= sectors_count; i++) {
+    for (size_t i = 0; i < sectors_count; i++) {
         // Read a sector
-        if (fread(in_sector, 2352, 1, image_file)) {
+        if (fread(in_sector, 1, 2352, image_file) == 2352) {
             // Update the input file position
             setcounter_analyze(ftello(image_file));
 
             sector_tools_types detected_type = sTools->detect(in_sector);
+            //printf("Current sector: %d -> Type: %d\n", current_sector, detected_type);
 
-            printf("Detected sector type: %d\n", detected_type);
+            //printf("Detected sector type: %d\n", detected_type);
 
             // Only check the sector info in data sectors
             if (detected_type != STT_CDDA && detected_type != STT_CDDA_GAP) {
@@ -930,62 +931,55 @@ static ecmtool_return_code disk_analyzer (
                 }
             }
 
-            if (curtype == STT_UNKNOWN) {
-                // Initialize the first sector type
-                sectors_toc[sectors_toc_size->count].mode = detected_type;
-                sectors_toc[sectors_toc_size->count].sector_count = 1;
-                curtype = detected_type;
-            }
-            else if (detected_type == curtype) {
-                // Sector type is the same so will be added
-                sectors_toc[sectors_toc_size->count].sector_count++;
-            }
-            else {
-                // Checking if the stream type is also different than the last one
-                sector_tools_stream_types stream_type = sTools->detect_stream(detected_type);
+            sector_tools_stream_types stream_type = sTools->detect_stream(detected_type);
+            // If there are no streams or stream type is different, create a new streams entry.
+            if (
+                streams_script.size() == 0 ||
+                streams_script.back().stream_data.type != (stream_type - 1)
+            ) {
+                // Push the new element to the end
+                streams_script.push_back(stream_script());
 
-                // Select the compression depending of the stream type and the user options
-                sector_tools_compression current_compression;
+                // Set the element data
+                streams_script.back().stream_data.type = stream_type - 1;
                 if (stream_type == STST_AUDIO) {
-                    current_compression = options->audio_compression;
+                    streams_script.back().stream_data.compression = options->audio_compression;
                 }
                 else {
-                    current_compression = options->data_compression;
+                    streams_script.back().stream_data.compression = options->data_compression;
                 }
 
-                if (curstreamtype == STST_UNKNOWN) {
-                    // First stream position. Set the known stream data
-                    streams_toc[streams_toc_size->count].type = stream_type - 1;
-                    streams_toc[streams_toc_size->count].compression = current_compression;
-                    curstreamtype = stream_type;
+                if (streams_script.size() > 1) {
+                    streams_script.back().stream_data.end_sector = streams_script[streams_script.size() - 2].stream_data.end_sector;
                 }
-                else if (stream_type != curstreamtype) {
-                    // Set the end sector of the current stream (was the previous sector)
-                    streams_toc[streams_toc_size->count].end_sector = i - 1;
-                    // Add one stream to the count
-                    streams_toc_size->count++;
-                    streams_toc[streams_toc_size->count].type = stream_type - 1;
-                    curstreamtype = stream_type;
+                else {
+                    streams_script.back().stream_data.end_sector = 0;
                 }
-
-                // Set the new sector toc position and initialize it
-                sectors_toc_size->count++;
-                sectors_toc[sectors_toc_size->count].mode = detected_type;
-                streams_toc[streams_toc_size->count].compression = current_compression;
-                sectors_toc[sectors_toc_size->count].sector_count = 1;
-                curtype = detected_type;
             }
+
+            if (
+                streams_script.back().sectors_data.size() == 0 ||
+                streams_script.back().sectors_data.back().mode != detected_type
+            ) {
+                // Push the new element to the end
+                streams_script.back().sectors_data.push_back(sector());
+
+                // Set the element data
+                streams_script.back().sectors_data.back().mode = detected_type;
+                streams_script.back().sectors_data.back().sector_count = 0;
+            }
+
+            streams_script.back().stream_data.end_sector++;
+            streams_script.back().sectors_data.back().sector_count++;
         }
         else {
             // There was an eror reading the new sector
+            printf("There was an error reading the input file.\n");
             return ECMTOOL_FILE_READ_ERROR;
         }
 
         current_sector++;
     }
-
-    // Setting the last stream sector_count to total sectors
-    streams_toc[streams_toc_size->count].end_sector = sectors_count;
 
     return ECMTOOL_OK;
 }
@@ -1072,7 +1066,7 @@ static ecmtool_return_code disk_encode (
                 );
 
                 if (res) {
-                    printf("\nThere was an error cleaning the sector\n");
+                    printf("There was an error cleaning the sector\n");
                     return ECMTOOL_PROCESSING_ERROR;
                 }
 
@@ -1105,6 +1099,11 @@ static ecmtool_return_code disk_encode (
                     }
                     else {
                         res = compobj -> compress(compress_buffer_left, out_sector, output_size, Z_NO_FLUSH);
+                    }
+
+                    if (res != 0) {
+                        printf("There was an error compressing the stream: %d.\n", res);
+                        return ECMTOOL_PROCESSING_ERROR;
                     }
 
                     // If buffer is above 75% or is the last sector, write the data to the output and reset the state
@@ -1433,7 +1432,7 @@ static ecmtool_return_code task_maker (
     size_t actual_sector = 0;
     uint32_t actual_sector_pos = 0;
 
-    for (uint32_t i = 0; i <= streams_toc_count.count; i++) {
+    for (uint32_t i = 0; i < streams_toc_count.count; i++) {
         streams_script.push_back(stream_script());
         streams_script.back().stream_data = streams_toc[i];
 
@@ -1441,6 +1440,7 @@ static ecmtool_return_code task_maker (
             if (actual_sector_pos > sectors_toc_count.count) {
                 // The streams sectors doesn't fit the sectors count
                 // Headers could be corrupted
+                printf("There was an error generating the script. Maybe the header is corrupted.\n");
                 return ECMTOOL_CORRUPTED_STREAM;
             }
             // Append the sector data to the current stream
@@ -1452,9 +1452,94 @@ static ecmtool_return_code task_maker (
 
         if (actual_sector > streams_toc[i].end_sector) {
             // The actual sector must be equal to last sector in stream, otherwise could be corrupted
+            printf("There was an error converting the TOC header to script.\n");
+            //printf("Actual: %d - Stream End: %d.\n", actual_sector, streams_toc[i].end_sector);
             return ECMTOOL_PROCESSING_ERROR;
         }
     }
 
     return ECMTOOL_OK;
+}
+
+
+static ecmtool_return_code task_to_streams_header (
+    stream *streams_toc,
+    sec_str_size &streams_toc_count,
+    std::vector<stream_script> &streams_script
+) {
+    // Set the sizes
+    streams_toc_count.count = streams_script.size();
+
+    //
+    // Set the data
+    //
+
+    // If the stream is not initialized, do it
+    if (!streams_toc) {
+        printf("There was an error reserving the memory for the stream toc.\n");
+        return ECMTOOL_BUFFER_MEMORY_ERROR;
+    }
+    // Set the data
+    for (uint32_t i = 0; i < streams_script.size(); i++) {
+        streams_toc[i].compression = streams_script[i].stream_data.compression;
+        streams_toc[i].end_sector = streams_script[i].stream_data.end_sector;
+        streams_toc[i].out_end_position = streams_script[i].stream_data.out_end_position;
+        streams_toc[i].type = streams_script[i].stream_data.type;
+    }
+
+    return ECMTOOL_OK;
+}
+
+
+static ecmtool_return_code task_to_sectors_header (
+    sector *sectors_toc,
+    sec_str_size &sectors_toc_count,
+    std::vector<stream_script> &streams_script
+) {
+    // Set the sizes
+    sectors_toc_count.count = 1;
+    for (uint32_t i = 0; i < streams_script.size(); i++) {
+        sectors_toc_count.count += streams_script[i].sectors_data.size();
+    }
+
+    //
+    // Set the data
+    //
+
+    // If the stream is not initialized, do it
+    if (!sectors_toc) {
+        printf("There was an error reserving the memory for the sectors toc.\n");
+        return ECMTOOL_BUFFER_MEMORY_ERROR;
+    }
+    // Set the data
+    uint32_t current_sector_data = 0;
+    for (uint32_t i = 0; i < streams_script.size(); i++) {
+        for (uint32_t j = 0; j < streams_script[i].sectors_data.size(); j++) {
+            sectors_toc[current_sector_data].mode = streams_script[i].sectors_data[j].mode;
+            sectors_toc[current_sector_data].sector_count = streams_script[i].sectors_data[j].sector_count;
+            current_sector_data++;
+        }
+    }
+
+    return ECMTOOL_OK;
+}
+
+
+void print_task(
+    std::vector<stream_script> &streams_script
+) {
+    size_t actual_sector = 0;
+
+    for (uint32_t i = 0; i < streams_script.size(); i++) {
+        printf("Stream %d - last sector %d - sectors type count %d.\n", i, streams_script[i].stream_data.end_sector, streams_script[i].sectors_data.size());
+
+        for (uint32_t j = 0; j < streams_script[i].sectors_data.size(); j++) {
+            printf("Actual_sector: %d - Sector count: %d.\n", actual_sector, streams_script[i].sectors_data[j].sector_count);
+            actual_sector += streams_script[i].sectors_data[j].sector_count;
+        }
+
+        if (actual_sector != streams_script[i].stream_data.end_sector) {
+            printf("End sector doesn't match\n");
+        }
+    }
 }

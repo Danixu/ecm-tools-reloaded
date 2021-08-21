@@ -113,12 +113,14 @@ enum sector_tools_types : uint8_t {
     STT_CDDA_GAP,
     STT_MODE1,
     STT_MODE1_GAP,
+    STT_MODE1_RAW,
     STT_MODE2,
     STT_MODE2_GAP,
     STT_MODE2_1,
     STT_MODE2_1_GAP,
     STT_MODE2_2,
-    STT_MODE2_2_GAP
+    STT_MODE2_2_GAP,
+    STT_MODEX
 };
 
 //
@@ -232,6 +234,14 @@ class sector_tools {
             uint16_t& output_size,
             optimization_options options
         );
+        // sector cleaner Unknown Mode
+        static int8_t clean_sector_modex(
+            uint8_t* out,
+            uint8_t* sector,
+            sector_tools_types type,
+            uint16_t& output_size,
+            optimization_options options
+        );
         // sector cleaner switcher
         static int8_t clean_sector(
             uint8_t* out,
@@ -278,6 +288,15 @@ class sector_tools {
         );
         //  sector regenerator Mode 2 XA 2
         int8_t regenerate_sector_mode2_xa2(
+            uint8_t* out,
+            uint8_t* sector,
+            sector_tools_types type,
+            uint16_t current_pos,
+            uint16_t& bytes_readed,
+            optimization_options options
+        );
+        //  sector regenerator Unknown mode
+        int8_t regenerate_sector_modex(
             uint8_t* out,
             uint8_t* sector,
             sector_tools_types type,

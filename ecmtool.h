@@ -222,14 +222,21 @@ static ecmtool_return_code task_maker (
     sec_str_size &sectors_toc_count,
     std::vector<stream_script> &streams_script
 );
+static ecmtool_return_code task_to_streams_header (
+    stream *streams_toc,
+    sec_str_size &streams_toc_count,
+    std::vector<stream_script> &streams_script
+);
+static ecmtool_return_code task_to_sectors_header (
+    sector *sectors_toc,
+    sec_str_size &sectors_toc_count,
+    std::vector<stream_script> &streams_script
+);
 static ecmtool_return_code disk_analyzer (
     sector_tools *sTools,
     FILE *image_file,
     size_t image_file_size,
-    stream *streams_toc,
-    sec_str_size *streams_toc_size,
-    sector *sectors_toc,
-    sec_str_size *sectors_toc_size,
+    std::vector<stream_script> &streams_script,
     ecm_options *options
 );
 static ecmtool_return_code disk_encode (
@@ -260,4 +267,8 @@ static void summary (
     ecm_options *options,
     sector_tools *sTools,
     size_t compressed_size
+);
+
+void print_task(
+    std::vector<stream_script> &streams_script
 );

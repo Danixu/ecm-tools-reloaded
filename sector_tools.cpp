@@ -68,8 +68,8 @@ sector_tools_types sector_tools::detect(uint8_t* sector) {
                 }
             }
 
-            // If EDC doesn't match, then the sector is damaged or is unknown
-            return STT_UNKNOWN;
+            // If EDC doesn't match, then the sector is damaged. It can be a protection method, so will be threated as RAW.
+            return STT_MODE1_RAW;
         }
         else if (
             sector[0x00F] == 0x02 // mode (1 byte)
@@ -115,6 +115,9 @@ sector_tools_types sector_tools::detect(uint8_t* sector) {
                 return STT_MODE2;
             }         
         }
+
+        // Data sector detected but was not possible to determine the mode. Maybe is a copy protection sector.
+        return STT_MODEX;
     }
     else {
         // Sector is not recognized, so might be a CDDA sector
@@ -532,12 +535,12 @@ int8_t sector_tools::clean_sector_mode1(
         output_size += 0x01;
     }
     // Data bytes
-    if (type == STT_MODE1 || !(options & OO_REMOVE_GAP)) {
+    if (type == STT_MODE1 || type == STT_MODE1_RAW || !(options & OO_REMOVE_GAP)) {
         memcpy(out + output_size, sector + 0x10, 0x800);
         output_size += 0x800;
     }
     // EDC bytes
-    if (!(options & OO_REMOVE_EDC)) {
+    if (!(options & OO_REMOVE_EDC) || type == STT_MODE1_RAW) {
         memcpy(out + output_size, sector + 0x810, 0x04);
         output_size += 0x04;
     }
@@ -547,7 +550,7 @@ int8_t sector_tools::clean_sector_mode1(
         output_size += 0x08;
     }
     // ECC bytes
-    if (!(options & OO_REMOVE_ECC)) {
+    if (!(options & OO_REMOVE_ECC) || type == STT_MODE1_RAW) {
         memcpy(out + output_size, sector + 0x81C, 0x114);
         output_size += 0x114;
     }
@@ -684,6 +687,32 @@ int8_t sector_tools::clean_sector_mode2_xa2(
     return 0;
 }
 
+// Unknown data mode
+int8_t sector_tools::clean_sector_modex(
+    uint8_t* out,
+    uint8_t* sector,
+    sector_tools_types type,
+    uint16_t& output_size,
+    optimization_options options
+) {
+    // SYNC bytes
+    if (!(options & OO_REMOVE_SYNC)) {
+        memcpy(out, sector, 0x0C);
+        output_size += 0x0C;
+    }
+    // Address bytes
+    if (!(options & OO_REMOVE_MSF)) {
+        memcpy(out + output_size, sector + 0x0C, 0x03);
+        output_size += 0x03;
+    }
+    // Rest of bytes
+    memcpy(out + output_size, sector + 0x0F, 0x921);
+    output_size += 0x921;
+
+    return 0;
+}
+
+
 // sector cleaner switcher
 int8_t sector_tools::clean_sector(
     uint8_t* out,
@@ -701,6 +730,7 @@ int8_t sector_tools::clean_sector(
 
         case STT_MODE1:
         case STT_MODE1_GAP:
+        case STT_MODE1_RAW:
             return clean_sector_mode1(out, sector, type, output_size, options);
             break;
 
@@ -717,7 +747,11 @@ int8_t sector_tools::clean_sector(
         case STT_MODE2_2:
         case STT_MODE2_2_GAP:
             return clean_sector_mode2_xa2(out, sector, type, output_size, options);
-            break;     
+            break;
+
+        case STT_MODEX:
+            return clean_sector_modex(out, sector, type, output_size, options);
+            break;
     }
 
     return 0;
@@ -770,7 +804,7 @@ int8_t sector_tools::regenerate_sector_mode1(
     }
     current_pos += 0x01;
     // Data bytes
-    if (type == STT_MODE1 || !(options & OO_REMOVE_GAP)) {
+    if (type == STT_MODE1 || type == STT_MODE1_RAW || !(options & OO_REMOVE_GAP)) {
         memcpy(out + current_pos, sector + bytes_readed, 0x800);
         bytes_readed += 0x800;
     }
@@ -779,7 +813,7 @@ int8_t sector_tools::regenerate_sector_mode1(
     }
     current_pos += 0x800;
     // EDC bytes
-    if (!(options & OO_REMOVE_EDC)) {
+    if (!(options & OO_REMOVE_EDC) || type == STT_MODE1_RAW) {
         memcpy(out + current_pos, sector + bytes_readed, 0x04);
         bytes_readed += 0x04;
     }
@@ -797,7 +831,7 @@ int8_t sector_tools::regenerate_sector_mode1(
     }
     current_pos += 0x08;
     // ECC bytes
-    if (!(options & OO_REMOVE_ECC)) {
+    if (!(options & OO_REMOVE_ECC) || type == STT_MODE1_RAW) {
         memcpy(out + current_pos, sector + bytes_readed, 0x114);
         bytes_readed += 0x114;
     }
@@ -957,6 +991,23 @@ int8_t sector_tools::regenerate_sector_mode2_xa2(
     return 0;
 }
 
+// Data sector unknown mode
+int8_t sector_tools::regenerate_sector_modex(
+    uint8_t* out,
+    uint8_t* sector,
+    sector_tools_types type,
+    uint16_t current_pos,
+    uint16_t& bytes_readed,
+    optimization_options options
+) {
+    // Rest of bytes
+    memcpy(out + current_pos, sector + bytes_readed, 0x921);
+    current_pos += 0x921;
+    bytes_readed = 0x921;
+
+    return 0;
+}
+
 // regenerate_sector switcher
 int8_t sector_tools::regenerate_sector(
     uint8_t* out,
@@ -1000,6 +1051,7 @@ int8_t sector_tools::regenerate_sector(
 
         case STT_MODE1:
         case STT_MODE1_GAP:
+        case STT_MODE1_RAW:
             return regenerate_sector_mode1(out, sector, type, current_pos, bytes_readed, options);
 
         case STT_MODE2:
@@ -1013,6 +1065,9 @@ int8_t sector_tools::regenerate_sector(
         case STT_MODE2_2:
         case STT_MODE2_2_GAP:
             return regenerate_sector_mode2_xa2(out, sector, type, current_pos, bytes_readed, options);
+
+        case STT_MODEX:
+            return regenerate_sector_modex(out, sector, type, current_pos, bytes_readed, options);
     }
 
     return 0;
@@ -1042,6 +1097,7 @@ int8_t sector_tools::encoded_sector_size(
 
         case STT_MODE1:
         case STT_MODE1_GAP:
+        case STT_MODE1_RAW:
             // SYNC bytes
             if (!(options & OO_REMOVE_SYNC)) {
                 output_size += 0x0C;
@@ -1055,11 +1111,11 @@ int8_t sector_tools::encoded_sector_size(
                 output_size += 0x01;
             }
             // Data bytes
-            if (type == STT_MODE1 || !(options & OO_REMOVE_GAP)) {
+            if (type == STT_MODE1 || type == STT_MODE1_RAW || !(options & OO_REMOVE_GAP)) {
                 output_size += 0x800;
             }
             // EDC bytes
-            if (!(options & OO_REMOVE_EDC)) {
+            if (!(options & OO_REMOVE_EDC) || type == STT_MODE1_RAW) {
                 output_size += 0x04;
             }
             // Zeroed bytes
@@ -1067,7 +1123,7 @@ int8_t sector_tools::encoded_sector_size(
                 output_size += 0x08;
             }
             // ECC bytes
-            if (!(options & OO_REMOVE_ECC)) {
+            if (!(options & OO_REMOVE_ECC) || type == STT_MODE1_RAW) {
                 output_size += 0x114;
             }
             break;
@@ -1156,7 +1212,21 @@ int8_t sector_tools::encoded_sector_size(
             if (!(options & OO_REMOVE_EDC)) {
                 output_size += 0x04;
             }
-            break;     
+            break;
+
+        case STT_MODEX:
+            // SYNC bytes
+            if (!(options & OO_REMOVE_SYNC)) {
+                output_size += 0x0C;
+            }
+            // Address bytes
+            if (!(options & OO_REMOVE_MSF)) {
+                output_size += 0x03;
+            }
+            // Rest of bytes
+            output_size += 0x921;
+
+            break;
     }
 
     return 0;
