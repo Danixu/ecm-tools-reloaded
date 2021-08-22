@@ -6,6 +6,8 @@ Based in the Neill Corlett ECM
 
 By Daniel Carrasco (https://www.electrosoftcloud.com)
 
+** I recommend to use the latest version, because old versions can contains bugs or incompatible features **                                                                                                                                                             
+
 # Description
 
 This ECM Tool allows you to remove all recoverable data from CD-ROM sectors, reducing the image size about 20% without using compression (depending of sectors types). This will allow to read the data from it very fast, and also can be complemented with a compression tool like 7zip to reach higher compression ratios.
@@ -56,12 +58,15 @@ Optional options:
            Add a end of block mark every X sectors in a seekable file. Max 255.
     -f/--force
            Force to ovewrite the output file
+    -k/--keep-output
+           Keep the output when the process has failed
 ```
 
 # Features
 
 * Improved sector detection. Now it detects and removes GAP and Dummy sectors (zeroed data).
-* Removes almost all non data bytes from sectors (sync, addr, mode, 50% of flags, EDC and ECC)
+* Optimizes almost all non data bytes from sectors (remove sync, addr, mode, 50% of flags, EDC and ECC)
+* Detects automatically if some of the optimizations cannot be done in a lossless way, and disable the failing optimization (copy protections).
 * A bit faster encoding/decoding: About 8s to encode or decode the FFVIII Disk 1 vs 11-14s of the original ECM tool.
 * Internal zlib, lzma, lz4 and FLAC compressions to do not depend of external tools.
 * Contains a sectors TOC in header and sectors sizes are constant, so it can be easily indexed.
