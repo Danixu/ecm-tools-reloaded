@@ -90,7 +90,7 @@ int main(int argc, char **argv) {
                     options.audio_compression = C_FLAC;
                 }
                 else {
-                    printf("Error: Unknown data compression mode: %s\n\n", optarg);
+                    fprintf(stderr, "Error: Unknown data compression mode: %s\n\n", optarg);
                     print_help();
                     return 1;
                 }
@@ -109,7 +109,7 @@ int main(int argc, char **argv) {
                     options.data_compression = C_LZ4;
                 }
                 else {
-                    printf("Error: Unknown data compression mode: %s\n\n", optarg);
+                    fprintf(stderr, "Error: Unknown data compression mode: %s\n\n", optarg);
                     print_help();
                     return 1;
                 }
@@ -122,7 +122,7 @@ int main(int argc, char **argv) {
                     temp_argument = std::stoi(optarg_s);
 
                     if (temp_argument > 9 || temp_argument < 0) {
-                        printf("Error: the provided compression level option is not correct.\n\n");
+                        fprintf(stderr, "Error: the provided compression level option is not correct.\n\n");
                         print_help();
                         return 1;
                     }
@@ -130,7 +130,7 @@ int main(int argc, char **argv) {
                         options.compression_level = (uint8_t)temp_argument;
                     }
                 } catch (std::exception const &e) {
-                    printf("Error: the provided compression level option is not correct.\n\n");
+                    fprintf(stderr, "Error: the provided compression level option is not correct.\n\n");
                     print_help();
                     return 1;
                 }
@@ -154,7 +154,7 @@ int main(int argc, char **argv) {
                     temp_argument = std::stoi(optarg_s);
 
                     if (!temp_argument || temp_argument > 255 || temp_argument < 0) {
-                        printf("Error: the provided sectors per block number is not correct.\n\n");
+                        fprintf(stderr, "Error: the provided sectors per block number is not correct.\n\n");
                         print_help();
                         return 1;
                     }
@@ -162,7 +162,7 @@ int main(int argc, char **argv) {
                         options.sectors_per_block = (uint8_t)temp_argument;
                     }
                 } catch (std::exception const &e) {
-                    printf("Error: the provided sectors per block number is not correct.\n\n");
+                    fprintf(stderr, "Error: the provided sectors per block number is not correct.\n\n");
                     print_help();
                     return 1;
                 }
@@ -186,7 +186,7 @@ int main(int argc, char **argv) {
     }
 
     if (infilename == NULL) {
-        printf("Error: input file is required.\n");
+        fprintf(stderr, "Error: input file is required.\n");
         print_help();
         return 1;
     }
@@ -204,19 +204,19 @@ int main(int argc, char **argv) {
             (fgetc(in) == 'C') &&
             (fgetc(in) == 'M')
         ) {
-            printf("An ECM file was detected... will be decoded\n");
+            fprintf(stderr, "An ECM file was detected... will be decoded\n");
             decode = true;
 
             if (fgetc(in) != 0x02) {
                 // The file is in the old format, so compatibility will be enabled
                 fclose(in);
 
-                printf("The imput file is not compatible with this program version. The program will exit.\n");
+                fprintf(stderr, "The imput file is not compatible with this program version. The program will exit.\n");
                 return 1;
             }
         }
         else {
-            printf("A BIN file was detected... will be encoded\n");
+            fprintf(stderr, "A BIN file was detected... will be encoded\n");
         }
         fclose(in);
     }
@@ -226,7 +226,7 @@ int main(int argc, char **argv) {
     if (outfilename == NULL) {
         tempfilename = (char*) malloc(strlen(infilename) + 7);
         if(!tempfilename) {
-            printf("Out of memory\n");
+            fprintf(stderr, "Out of memory\n");
             return 1;
         }
 
@@ -299,7 +299,7 @@ static ecmtool_return_code ecmify(
     if (!options->force_rewrite) {
         out = fopen(outfilename, "rb");
         if (out) {
-            printf("Error: %s exists; refusing to overwrite. Use the -f argument to force the overwrite.\n", outfilename);
+            fprintf(stderr, "Error: %s exists; refusing to overwrite. Use the -f argument to force the overwrite.\n", outfilename);
             fclose(out);
             return ECMTOOL_FILE_WRITE_ERROR;
         }
@@ -343,14 +343,14 @@ static ecmtool_return_code ecmify(
     // Allocate input buffer space
     in_buffer = (char*) malloc(BUFFER_SIZE);
     if(!in_buffer) {
-        printf("Out of memory\n");
+        fprintf(stderr, "Out of memory\n");
         return_code = ECMTOOL_BUFFER_MEMORY_ERROR;
         goto exit_ecmify;
     }
     // Allocate output buffer space
     out_buffer = (char*) malloc(BUFFER_SIZE);
     if(!out_buffer) {
-        printf("Out of memory\n");
+        fprintf(stderr, "Out of memory\n");
         return_code = ECMTOOL_BUFFER_MEMORY_ERROR;
         goto exit_ecmify;
     }
@@ -369,8 +369,8 @@ static ecmtool_return_code ecmify(
     fseeko(in, 0, SEEK_END);
     in_total_size = ftello(in);
     if (in_total_size % 2352) {
-        printf("ERROR: The input file doesn't appear to be a CD-ROM image\n");
-        printf("       This program only allows to process CD-ROM images\n");
+        fprintf(stderr, "ERROR: The input file doesn't appear to be a CD-ROM image\n");
+        fprintf(stderr, "       This program only allows to process CD-ROM images\n");
 
         return_code = ECMTOOL_FILE_READ_ERROR;
         goto exit_ecmify;
@@ -416,7 +416,7 @@ static ecmtool_return_code ecmify(
 
     sectors_toc = new sector[0xFFFFF];
     if (!sectors_toc) {
-        printf("There was an error reserving the memory for the sectors toc.\n");
+        fprintf(stderr, "There was an error reserving the memory for the sectors toc.\n");
         goto exit_ecmify;
     }
     return_code = task_to_sectors_header (
@@ -432,7 +432,7 @@ static ecmtool_return_code ecmify(
     sectors_toc_size = sectors_toc_count.count * sizeof(struct sector);
     sectors_toc_c_buffer = (char*) malloc(sectors_toc_size * 2);
     if(!sectors_toc_c_buffer) {
-        printf("Out of memory\n");
+        fprintf(stderr, "Out of memory\n");
         return_code = ECMTOOL_BUFFER_MEMORY_ERROR;
         goto exit_ecmify;
     }
@@ -440,7 +440,7 @@ static ecmtool_return_code ecmify(
     {
         uint32_t compressed_size = sectors_toc_size * 2;
         if (compress_header((uint8_t*)sectors_toc_c_buffer, compressed_size, (uint8_t*)sectors_toc, sectors_toc_size, 9)) {
-            printf("There was an error compressing the output header.\n");
+            fprintf(stderr, "There was an error compressing the output header.\n");
             return_code = ECMTOOL_HEADER_COMPRESSION_ERROR;
             goto exit_ecmify;
         }
@@ -504,7 +504,7 @@ static ecmtool_return_code ecmify(
 
     // End Of TOC reached, so file should have be processed completly
     if (ftello(in) != in_total_size) {
-        printf("\n\nThe input file was not fully readed...\n");
+        fprintf(stderr, "\n\nThe input file was not fully readed...\n");
         printfileerror(in, infilename);
         return_code = ECMTOOL_FILE_READ_ERROR;
     }
@@ -552,16 +552,16 @@ static ecmtool_return_code ecmify(
     }
 
     if (!return_code) {
-        printf("\n\nFinished!\n");
+        fprintf(stdout, "\n\nFinished!\n");
     }
     else {
-        printf("\n\nThere was an error processing the input file: %d\n\n", return_code);
+        fprintf(stderr, "\n\nThere was an error processing the input file: %d\n\n", return_code);
         // We will remove the file if something went wrong
         FILE *out_remove_tmp = fopen(outfilename, "rb");
         if (!options->keep_output && out_remove_tmp) {
             fclose(out_remove_tmp);
             if (remove(outfilename)) {
-                printf("There was an error removing the output file... Please remove it manually.\n");
+                fprintf(stderr, "There was an error removing the output file... Please remove it manually.\n");
             }
         }
     }
@@ -582,7 +582,7 @@ static ecmtool_return_code unecmify(
     if (!options->force_rewrite) {
         out = fopen(outfilename, "rb");
         if (out) {
-            printf("Error: %s exists; refusing to overwrite. Use the -f argument to force the overwrite.\n", outfilename);
+            fprintf(stderr, "Error: %s exists; refusing to overwrite. Use the -f argument to force the overwrite.\n", outfilename);
             fclose(out);
             return ECMTOOL_FILE_WRITE_ERROR;
         }
@@ -614,14 +614,14 @@ static ecmtool_return_code unecmify(
     // Allocate input buffer space
     in_buffer = (char*) malloc(BUFFER_SIZE);
     if(!in_buffer) {
-        printf("Out of memory\n");
+        fprintf(stderr, "Out of memory\n");
         return_code = ECMTOOL_BUFFER_MEMORY_ERROR;
         goto exit_unecmify;
     }
     // Allocate output buffer space
     out_buffer = (char*) malloc(BUFFER_SIZE);
     if(!out_buffer) {
-        printf("Out of memory\n");
+        fprintf(stderr, "Out of memory\n");
         return_code = ECMTOOL_BUFFER_MEMORY_ERROR;
         goto exit_unecmify;
     }
@@ -657,7 +657,7 @@ static ecmtool_return_code unecmify(
     streams_toc = new stream[streams_toc_count.count + 1];
     if (sizeof(streams_toc) > streams_toc_count.size) {
         // There was an error in the header
-        printf("Corrupted header.\n");
+        fprintf(stderr, "Corrupted header.\n");
         return_code = ECMTOOL_CORRUPTED_HEADER;
         goto exit_unecmify;
     }
@@ -668,7 +668,7 @@ static ecmtool_return_code unecmify(
     sectors_toc = new sector[sectors_toc_count.count + 1];
     sectors_toc_c_buffer = (char*) malloc(sectors_toc_count.size);
     if(!sectors_toc_c_buffer) {
-        printf("Out of memory\n");
+        fprintf(stderr, "Out of memory\n");
         return_code = ECMTOOL_BUFFER_MEMORY_ERROR;
     }
     if (return_code) {
@@ -688,7 +688,7 @@ static ecmtool_return_code unecmify(
                 sectors_toc_count.size
             )
         ) {
-            printf("There was an error reading the header\n");
+            fprintf(stderr, "There was an error reading the header\n");
             return_code = ECMTOOL_CORRUPTED_HEADER;
         }
         if (return_code) {
@@ -726,9 +726,11 @@ static ecmtool_return_code unecmify(
         free(sectors_toc_c_buffer);
     }
     // Flushing data and closing files
+    size_t in_size = ftello(in);
     if (in) {
         fclose(in);
     }
+    size_t out_size = ftello(out);
     if (out) {
         fflush(out);
         fclose(out);
@@ -753,14 +755,16 @@ static ecmtool_return_code unecmify(
 
     // If something went wrong, inform the user and delete the output file
     if (!return_code) {
-        printf("\n\nFinished!\n");
+        fprintf(stdout, "\n\nDecoding finished correctly!\n\n");
+        fprintf(stdout, "Sumary:\n");
+        fprintf(stdout, "\tECM Size: %d bytes \t -> \tOriginal size: %d bytes\n\n", in_size, out_size);
     }
     else {
-        printf("\n\nThere was an error processing the input file: %d\n\n", return_code);
+        fprintf(stderr, "\n\nThere was an error processing the input file: %d\n\n", return_code);
         // We will remove the file if something went wrong
         if (!options->keep_output) {
             if (remove(outfilename)) {
-                printf("There was an error removing the output file... Please remove it manually.\n");
+                fprintf(stderr, "There was an error removing the output file... Please remove it manually.\n");
             }
         }
     }
@@ -769,7 +773,7 @@ static ecmtool_return_code unecmify(
 
 void print_help() {
     banner();
-    printf(
+    fprintf(stderr, 
         "Usage:\n"
         "\n"
         "To encode:\n"
@@ -832,37 +836,37 @@ static void summary(uint32_t *sectors, ecm_options *options, sector_tools *sTool
         ecm_size += sectors[i] * optimized_sector_sizes[i];
     }
 
-    printf("\n\n");
-    printf(" ECM cleanup sumpary\n");
-    printf("------------------------------------------------------------\n");
-    printf(" Type               Sectors         In Size        Out Size\n");
-    printf("------------------------------------------------------------\n");
-    printf("CDDA ............... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[1], MB(sectors[1] * 2352), MB(sectors[1] * optimized_sector_sizes[1])); 
-    printf("CDDA Gap ........... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[2], MB(sectors[2] * 2352), MB(sectors[2] * optimized_sector_sizes[2]));
-    printf("Mode 1 ............. %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[3], MB(sectors[3] * 2352), MB(sectors[3] * optimized_sector_sizes[3]));
-    printf("Mode 1 Gap ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[4], MB(sectors[4] * 2352), MB(sectors[4] * optimized_sector_sizes[4]));
-    printf("Mode 1 RAW ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[5], MB(sectors[5] * 2352), MB(sectors[5] * optimized_sector_sizes[5]));
-    printf("Mode 2 ............. %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[6], MB(sectors[6] * 2352), MB(sectors[6] * optimized_sector_sizes[6]));
-    printf("Mode 2 Gap ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[7], MB(sectors[7] * 2352), MB(sectors[7] * optimized_sector_sizes[7]));
-    printf("Mode 2 XA1 ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[8], MB(sectors[8] * 2352), MB(sectors[8] * optimized_sector_sizes[8]));
-    printf("Mode 2 XA1 Gap ..... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[9], MB(sectors[9] * 2352), MB(sectors[9] * optimized_sector_sizes[9]));
-    printf("Mode 2 XA2 ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[10], MB(sectors[10] * 2352), MB(sectors[10] * optimized_sector_sizes[10]));
-    printf("Mode 2 XA2 Gap ..... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[11], MB(sectors[11] * 2352), MB(sectors[11] * optimized_sector_sizes[11]));
-    printf("Unknown data ....... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[12], MB(sectors[12] * 2352), MB(sectors[12] * optimized_sector_sizes[12]));
-    printf("-------------------------------------------------------------\n");
-    printf("Total .............. %6d ...... %6.2fMb ...... %6.2fMb\n", total_sectors, MB(total_size), MB(ecm_size));
-    printf("ECM reduction (input vs ecm) ..................... %2.2f%%\n", (1.0 - ((float)ecm_size / total_size)) * 100);
-    printf("\n\n");
+    fprintf(stdout, "\n\n");
+    fprintf(stdout, " ECM cleanup sumpary\n");
+    fprintf(stdout, "------------------------------------------------------------\n");
+    fprintf(stdout, " Type               Sectors         In Size        Out Size\n");
+    fprintf(stdout, "------------------------------------------------------------\n");
+    fprintf(stdout, "CDDA ............... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[1], MB(sectors[1] * 2352), MB(sectors[1] * optimized_sector_sizes[1])); 
+    fprintf(stdout, "CDDA Gap ........... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[2], MB(sectors[2] * 2352), MB(sectors[2] * optimized_sector_sizes[2]));
+    fprintf(stdout, "Mode 1 ............. %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[3], MB(sectors[3] * 2352), MB(sectors[3] * optimized_sector_sizes[3]));
+    fprintf(stdout, "Mode 1 Gap ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[4], MB(sectors[4] * 2352), MB(sectors[4] * optimized_sector_sizes[4]));
+    fprintf(stdout, "Mode 1 RAW ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[5], MB(sectors[5] * 2352), MB(sectors[5] * optimized_sector_sizes[5]));
+    fprintf(stdout, "Mode 2 ............. %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[6], MB(sectors[6] * 2352), MB(sectors[6] * optimized_sector_sizes[6]));
+    fprintf(stdout, "Mode 2 Gap ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[7], MB(sectors[7] * 2352), MB(sectors[7] * optimized_sector_sizes[7]));
+    fprintf(stdout, "Mode 2 XA1 ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[8], MB(sectors[8] * 2352), MB(sectors[8] * optimized_sector_sizes[8]));
+    fprintf(stdout, "Mode 2 XA1 Gap ..... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[9], MB(sectors[9] * 2352), MB(sectors[9] * optimized_sector_sizes[9]));
+    fprintf(stdout, "Mode 2 XA2 ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[10], MB(sectors[10] * 2352), MB(sectors[10] * optimized_sector_sizes[10]));
+    fprintf(stdout, "Mode 2 XA2 Gap ..... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[11], MB(sectors[11] * 2352), MB(sectors[11] * optimized_sector_sizes[11]));
+    fprintf(stdout, "Unknown data ....... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[12], MB(sectors[12] * 2352), MB(sectors[12] * optimized_sector_sizes[12]));
+    fprintf(stdout, "-------------------------------------------------------------\n");
+    fprintf(stdout, "Total .............. %6d ...... %6.2fMb ...... %6.2fMb\n", total_sectors, MB(total_size), MB(ecm_size));
+    fprintf(stdout, "ECM reduction (input vs ecm) ..................... %2.2f%%\n", (1.0 - ((float)ecm_size / total_size)) * 100);
+    fprintf(stdout, "\n\n");
 
-    printf(" Compression Sumary\n");
-    printf("-------------------------------------------------------------\n");
-    printf("Compressed size (output) ............... %3.2fMB\n", MB(compressed_size));
-    printf("Compression ratio (ecm vs output)....... %2.2f%%\n", abs((1.0 - ((float)compressed_size / ecm_size)) * 100));
-    printf("\n\n");
+    fprintf(stdout, " Compression Sumary\n");
+    fprintf(stdout, "-------------------------------------------------------------\n");
+    fprintf(stdout, "Compressed size (output) ............... %3.2fMB\n", MB(compressed_size));
+    fprintf(stdout, "Compression ratio (ecm vs output)....... %2.2f%%\n", abs((1.0 - ((float)compressed_size / ecm_size)) * 100));
+    fprintf(stdout, "\n\n");
 
-    printf(" Output summary\n");
-    printf("-------------------------------------------------------------\n");
-    printf("Total reduction (input vs output) ...... %2.2f%%\n", abs((1.0 - ((float)compressed_size / total_size)) * 100));
+    fprintf(stdout, " Output summary\n");
+    fprintf(stdout, "-------------------------------------------------------------\n");
+    fprintf(stdout, "Total reduction (input vs output) ...... %2.2f%%\n", abs((1.0 - ((float)compressed_size / total_size)) * 100));
 }
 
 
@@ -977,7 +981,7 @@ static ecmtool_return_code disk_analyzer (
         }
         else {
             // There was an eror reading the new sector
-            printf("There was an error reading the input file.\n");
+            fprintf(stderr, "There was an error reading the input file.\n");
             return ECMTOOL_FILE_READ_ERROR;
         }
 
@@ -1029,7 +1033,7 @@ static ecmtool_return_code disk_encode (
             // Initialize the compressor buffer
             comp_buffer = (uint8_t*) malloc(BUFFER_SIZE);
             if(!comp_buffer) {
-                printf("Out of memory\n");
+                fprintf(stderr, "Out of memory\n");
                 return ECMTOOL_BUFFER_MEMORY_ERROR;
             }
 
@@ -1043,7 +1047,7 @@ static ecmtool_return_code disk_encode (
             // Process the number of sectors of every type
             for (uint32_t k = 0; k < streams_script[i].sectors_data[j].sector_count; k++) {
                 if (feof(image_in)){
-                    printf("Unexpected EOF detected.\n");
+                    fprintf(stderr, "Unexpected EOF detected.\n");
                     return ECMTOOL_FILE_READ_ERROR;
                 }
 
@@ -1069,7 +1073,7 @@ static ecmtool_return_code disk_encode (
                 );
 
                 if (res) {
-                    printf("There was an error cleaning the sector\n");
+                    fprintf(stderr, "There was an error cleaning the sector\n");
                     return ECMTOOL_PROCESSING_ERROR;
                 }
 
@@ -1081,7 +1085,7 @@ static ecmtool_return_code disk_encode (
                 case C_NONE:
                     fwrite(out_sector, output_size, 1, ecm_out);
                     if (ferror(ecm_out)) {
-                        printf("\nThere was an error writting the output file");
+                        fprintf(stderr, "\nThere was an error writting the output file");
                         return ECMTOOL_FILE_WRITE_ERROR;
                     }
                     break;
@@ -1105,7 +1109,7 @@ static ecmtool_return_code disk_encode (
                     }
 
                     if (res != 0) {
-                        printf("There was an error compressing the stream: %d.\n", res);
+                        fprintf(stderr, "There was an error compressing the stream: %d.\n", res);
                         return ECMTOOL_PROCESSING_ERROR;
                     }
 
@@ -1113,7 +1117,7 @@ static ecmtool_return_code disk_encode (
                     if (compress_buffer_left < (BUFFER_SIZE * 0.25) || (current_sector) == streams_script[i].stream_data.end_sector) {
                         fwrite(comp_buffer, BUFFER_SIZE - compress_buffer_left, 1, ecm_out);
                         if (ferror(ecm_out)) {
-                            printf("\nThere was an error writting the output file");
+                            fprintf(stderr, "\nThere was an error writting the output file");
                             return ECMTOOL_FILE_WRITE_ERROR;
                         }
                         size_t output_size = BUFFER_SIZE;
@@ -1173,7 +1177,7 @@ static ecmtool_return_code disk_decode (
             // Create the decompression buffer
             decomp_buffer = (uint8_t*) malloc(BUFFER_SIZE);
             if(!decomp_buffer) {
-                printf("Out of memory\n");
+                fprintf(stderr, "Out of memory\n");
                 return ECMTOOL_BUFFER_MEMORY_ERROR;
             }
             // Check if stream size is smaller than the buffer size and use the smaller size as "to_read"
@@ -1195,7 +1199,7 @@ static ecmtool_return_code disk_decode (
             // Process the number of sectors of every type
             for (uint32_t k = 0; k < streams_script[i].sectors_data[j].sector_count; k++) {
                 if (feof(ecm_in)){
-                    printf("Unexpected EOF detected.\n");
+                    fprintf(stderr, "Unexpected EOF detected.\n");
                     return ECMTOOL_FILE_READ_ERROR;
                 }
 
@@ -1295,7 +1299,7 @@ static ecmtool_return_code disk_decode (
         return ECMTOOL_OK;
     }
     else {
-        printf("\n\nWrong CRC!... Maybe the input file is damaged.\n");
+        fprintf(stderr, "\n\nWrong CRC!... Maybe the input file is damaged.\n");
         return ECMTOOL_PROCESSING_ERROR;
     }
 }
@@ -1445,7 +1449,7 @@ static ecmtool_return_code task_maker (
             if (actual_sector_pos > sectors_toc_count.count) {
                 // The streams sectors doesn't fit the sectors count
                 // Headers could be corrupted
-                printf("There was an error generating the script. Maybe the header is corrupted.\n");
+                fprintf(stderr, "There was an error generating the script. Maybe the header is corrupted.\n");
                 return ECMTOOL_CORRUPTED_STREAM;
             }
             // Append the sector data to the current stream
@@ -1457,7 +1461,7 @@ static ecmtool_return_code task_maker (
 
         if (actual_sector > streams_toc[i].end_sector) {
             // The actual sector must be equal to last sector in stream, otherwise could be corrupted
-            printf("There was an error converting the TOC header to script.\n");
+            fprintf(stderr, "There was an error converting the TOC header to script.\n");
             //printf("Actual: %d - Stream End: %d.\n", actual_sector, streams_toc[i].end_sector);
             return ECMTOOL_PROCESSING_ERROR;
         }
@@ -1481,7 +1485,7 @@ static ecmtool_return_code task_to_streams_header (
 
     // If the stream is not initialized, do it
     if (!streams_toc) {
-        printf("There was an error reserving the memory for the stream toc.\n");
+        fprintf(stderr, "There was an error reserving the memory for the stream toc.\n");
         return ECMTOOL_BUFFER_MEMORY_ERROR;
     }
     // Set the data
@@ -1513,7 +1517,7 @@ static ecmtool_return_code task_to_sectors_header (
 
     // If the stream is not initialized, do it
     if (!sectors_toc) {
-        printf("There was an error reserving the memory for the sectors toc.\n");
+        fprintf(stderr, "There was an error reserving the memory for the sectors toc.\n");
         return ECMTOOL_BUFFER_MEMORY_ERROR;
     }
     // Set the data
@@ -1536,15 +1540,15 @@ void print_task(
     size_t actual_sector = 0;
 
     for (uint32_t i = 0; i < streams_script.size(); i++) {
-        printf("Stream %d - last sector %d - sectors type count %d.\n", i, streams_script[i].stream_data.end_sector, streams_script[i].sectors_data.size());
+        fprintf(stdout, "Stream %d - last sector %d - sectors type count %d.\n", i, streams_script[i].stream_data.end_sector, streams_script[i].sectors_data.size());
 
         for (uint32_t j = 0; j < streams_script[i].sectors_data.size(); j++) {
-            printf("Actual_sector: %d - Sector count: %d.\n", actual_sector, streams_script[i].sectors_data[j].sector_count);
+            fprintf(stdout, "Actual_sector: %d - Sector count: %d.\n", actual_sector, streams_script[i].sectors_data[j].sector_count);
             actual_sector += streams_script[i].sectors_data[j].sector_count;
         }
 
         if (actual_sector != streams_script[i].stream_data.end_sector) {
-            printf("End sector doesn't match\n");
+            fprintf(stdout, "End sector doesn't match\n");
         }
     }
 }
