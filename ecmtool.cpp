@@ -557,7 +557,9 @@ static ecmtool_return_code ecmify(
     else {
         printf("\n\nThere was an error processing the input file: %d\n\n", return_code);
         // We will remove the file if something went wrong
-        if (!options->keep_output) {
+        FILE *out_remove_tmp = fopen(outfilename, "rb");
+        if (!options->keep_output && out_remove_tmp) {
+            fclose(out_remove_tmp);
             if (remove(outfilename)) {
                 printf("There was an error removing the output file... Please remove it manually.\n");
             }
