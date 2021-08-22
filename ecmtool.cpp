@@ -755,9 +755,9 @@ static ecmtool_return_code unecmify(
 
     // If something went wrong, inform the user and delete the output file
     if (!return_code) {
-        fprintf(stdout, "\n\nDecoding completed successfully!\n\n");
+        fprintf(stdout, "Decoding completed successfully!\n\n");
         fprintf(stdout, "Sumary:\n");
-        fprintf(stdout, "\tECM Size: %d bytes \t -> \tOriginal size: %d bytes\n\n", in_size, out_size);
+        fprintf(stdout, "\tECM Size: %d bytes -> Original size: %d bytes\n\n", in_size, out_size);
     }
     else {
         fprintf(stderr, "\n\nThere was an error processing the input file: %d\n\n", return_code);

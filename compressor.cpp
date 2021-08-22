@@ -1,21 +1,21 @@
-////////////////////////////////////////////////////////////////////////////////
-//
-// Created by Daniel Carrasco at https://www.electrosoftcloud.com
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this program.  If not, see <http://www.gnu.org/licenses/>.
-//
-////////////////////////////////////////////////////////////////////////////////
+/*******************************************************************************
+ * 
+ * Created by Daniel Carrasco at https://www.electrosoftcloud.com
+ * 
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ ******************************************************************************/
 
 #include <stdexcept>
 #include "compressor.h"
@@ -198,6 +198,16 @@ int8_t compressor::compress(size_t &out_size, uint8_t* in, size_t in_size, uint8
 
             return_code = deflate(&strm_zlib, flush_mode);
 
+            // If is the end of the stream, then is OK
+            if (return_code == Z_STREAM_END) {
+                return_code = Z_OK;
+            }
+            // If the buffer is 0 bytes the compressor will give BUF_ERROR.
+            // Can be ignored because no data was sent so nothing failed
+            if (return_code == Z_BUF_ERROR && in_size == 0) {
+                return_code = Z_OK;
+            }
+
             out_size = strm_zlib.avail_out;
             return return_code;
             break;
@@ -218,7 +228,13 @@ int8_t compressor::compress(size_t &out_size, uint8_t* in, size_t in_size, uint8
 
             return_code = lzma_code(&strm_lzma, flushmode_lzma);
             
+            // If is the end of the stream, then is OK
             if (return_code == LZMA_STREAM_END) {
+                return_code = LZMA_OK;
+            }
+            // If the buffer is 0 bytes the compressor will give BUF_ERROR.
+            // Can be ignored because no data was sent so nothing failed
+            if (return_code == LZMA_BUF_ERROR && in_size == 0) {
                 return_code = LZMA_OK;
             }
 
