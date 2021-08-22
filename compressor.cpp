@@ -253,7 +253,7 @@ int8_t compressor::compress(size_t &out_size, uint8_t* in, size_t in_size, uint8
     }
 }
 
-int8_t compressor::decompress(uint8_t* out, size_t & out_size, size_t &in_size, uint8_t flusmode){
+int8_t compressor::decompress(uint8_t* out, size_t &out_size, size_t &in_size, uint8_t flusmode){
     if (!compression) {
         int8_t return_code;
         switch(comp_mode) {
