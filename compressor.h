@@ -34,8 +34,7 @@ enum sector_tools_compression : uint8_t {
     C_ZLIB,
     C_LZMA,
     C_LZ4,
-    C_FLAC,
-    C_APE,
+    C_FLAC
 };
     
 //

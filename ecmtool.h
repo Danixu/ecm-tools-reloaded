@@ -1,9 +1,9 @@
 /*******************************************************************************
- *
+ */
 #define TITLE "ecmtool - Encoder/decoder for Error Code Modeler format, with advanced features"
 #define COPYR "Copyright (C) 2021 Daniel Carrasco"
-#define VERSI "2.3.2-alpha"
- * 
+#define VERSI "3.0.0-alpha"
+/* 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
@@ -22,16 +22,18 @@
 #include "banner.h"
 #include "sector_tools.h"
 #include <getopt.h>
-#include <stdbool.h>
-#include <string>
-#include <stdexcept>
+//#include <stdbool.h>
+#include <algorithm>
+//#include <stdexcept>
 #include <stdio.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <time.h>
-#include <limits.h>
-#include <ctype.h>
+//#include <stdlib.h>
+//#include <errno.h>
+//#include <time.h>
+//#include <limits.h>
+//#include <ctype.h>
 #include <vector>
+#include <fstream>
+#include <chrono>
 
 
 // Configurations
@@ -139,12 +141,37 @@ struct sector {
     uint8_t mode : 4;
     uint32_t sector_count = 0;
 };
-#pragma pack(pop)
+
+struct block_header {
+    uint8_t type = 0;
+    uint8_t compression = 0;
+    uint64_t block_size = 0;
+    uint64_t real_block_size = 0;
+};
+
+struct blocks_toc {
+    uint8_t type;
+    uint64_t start_position;
+};
+
+struct ecm_header {
+    uint8_t optimizations;
+    uint8_t sectors_per_block;
+    uint64_t crc_mode;
+    uint64_t streams_toc_pos;
+    uint64_t sectors_toc_pos;
+    uint64_t ecm_data_pos;
+    uint8_t title_length;
+    std::string title;
+};
 
 struct sec_str_size {
+    sector_tools_compression compression;
     uint32_t count;
-    uint32_t size;
+    uint32_t uncompressed_size;
+    uint32_t compressed_size;
 };
+#pragma pack(pop)
 
 // Struct for script vector
 struct stream_script {
@@ -162,6 +189,9 @@ struct ecm_options {
     bool extreme_compression = false;
     bool seekable = false;
     uint8_t sectors_per_block = SECTORS_PER_BLOCK;
+    std::string in_filename;
+    std::string out_filename;
+    std::string image_title;
     optimization_options optimizations = (
         OO_REMOVE_SYNC |
         OO_REMOVE_MSF |
@@ -192,9 +222,31 @@ enum ecmtool_return_code {
 
 // Declare the functions
 void print_help();
+int get_options(
+    int argc,
+    char **argv,
+    ecm_options *options
+);
+int image_to_ecm_block(
+    std::ifstream &in_file,
+    std::fstream &out_file,
+    ecm_options *options
+);
+int write_block_header(
+    std::fstream &out_file,
+    block_header *block_header
+);
+static ecmtool_return_code disk_analyzer (
+    sector_tools *sTools,
+    std::ifstream &in_file,
+    size_t image_file_size,
+    std::vector<stream_script> &streams_script,
+    ecm_header *ecm_data_header,
+    ecm_options *options
+);
 static ecmtool_return_code ecmify(
-    const char *infilename,
-    const char *outfilename,
+    std::ifstream &in_file,
+    std::fstream &out_file,
     ecm_options *options
 );
 static ecmtool_return_code unecmify(
@@ -223,26 +275,20 @@ static ecmtool_return_code task_maker (
     std::vector<stream_script> &streams_script
 );
 static ecmtool_return_code task_to_streams_header (
-    stream *streams_toc,
+    stream *&streams_toc,
     sec_str_size &streams_toc_count,
     std::vector<stream_script> &streams_script
 );
 static ecmtool_return_code task_to_sectors_header (
-    sector *sectors_toc,
+    sector *&sectors_toc,
     sec_str_size &sectors_toc_count,
     std::vector<stream_script> &streams_script
 );
-static ecmtool_return_code disk_analyzer (
-    sector_tools *sTools,
-    FILE *image_file,
-    size_t image_file_size,
-    std::vector<stream_script> &streams_script,
-    ecm_options *options
-);
+
 static ecmtool_return_code disk_encode (
     sector_tools *sTools,
-    FILE *image_file,
-    FILE *emc_out,
+    std::ifstream &in_file,
+    std::fstream &out_file,
     std::vector<stream_script> &streams_script,
     ecm_options *options,
     uint32_t *sectors_type,
