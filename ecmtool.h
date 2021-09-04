@@ -33,6 +33,8 @@
 //#include <ctype.h>
 #include <vector>
 #include <fstream>
+#include <iostream>
+#include <iomanip>
 #include <chrono>
 
 
@@ -218,6 +220,14 @@ enum ecmtool_return_code {
     ECMTOOL_CORRUPTED_HEADER
 };
 
+enum ecmfile_block_type {
+    ECMFILE_BLOCK_TYPE_DELETED = 0,
+    ECMFILE_BLOCK_TYPE_METADATA,
+    ECMFILE_BLOCK_TYPE_TOC,
+    ECMFILE_BLOCK_TYPE_ECM,
+    ECMFILE_BLOCK_TYPE_FILE,
+};
+
 ////////////////////////////////////////////////////////////////////////////////
 
 // Declare the functions
@@ -232,8 +242,17 @@ int image_to_ecm_block(
     std::fstream &out_file,
     ecm_options *options
 );
+int ecm_block_to_image(
+    std::ifstream &in_file,
+    std::fstream &out_file,
+    ecm_options *options
+);
 int write_block_header(
     std::fstream &out_file,
+    block_header *block_header
+);
+int read_block_header(
+    std::ifstream &out_file,
     block_header *block_header
 );
 static ecmtool_return_code disk_analyzer (
@@ -291,15 +310,15 @@ static ecmtool_return_code disk_encode (
     std::fstream &out_file,
     std::vector<stream_script> &streams_script,
     ecm_options *options,
-    uint32_t *sectors_type,
-    uint32_t &input_edc
+    uint32_t *sectors_type
 );
 static ecmtool_return_code disk_decode (
     sector_tools *sTools,
-    FILE *ecm_in,
-    FILE *image_out,
+    std::ifstream &in_file,
+    std::fstream &out_file,
     std::vector<stream_script> &streams_script,
-    ecm_options *options
+    ecm_options *options,
+    uint64_t ecm_block_start_position
 );
 static void resetcounter(off_t total);
 static void encode_progress(void);
@@ -318,3 +337,11 @@ static void summary (
 void print_task(
     std::vector<stream_script> &streams_script
 );
+
+/*
+void write_to_file(std::string filename, uint8_t *data, uint64_t size) {
+    FILE *out_file = fopen(filename.c_str(), "wb");
+    fwrite(data, size, 1, out_file);
+    fclose(out_file);
+}
+*/
