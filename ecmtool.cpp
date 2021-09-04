@@ -69,7 +69,7 @@ int main(int argc, char **argv) {
     }
 
     if (options.in_filename.empty()) {
-        fprintf(stderr, "Error: input file is required.\n");
+        fprintf(stderr, "ERROR: input file is required.\n");
         print_help();
         return 1;
     }
@@ -81,7 +81,7 @@ int main(int argc, char **argv) {
     {
         char dummy;
         if (!in_file.read(&dummy, 0)) {
-            fprintf(stderr, "Error: input file cannot be opened.\n");
+            fprintf(stderr, "ERROR: input file cannot be opened.\n");
             return 1;
         }
     }
@@ -138,7 +138,7 @@ int main(int argc, char **argv) {
         char dummy;
         out_file.open(options.out_filename.c_str(), std::ios::in|std::ios::binary);
         if (out_file.read(&dummy, 0)) {
-            fprintf(stderr, "Error: Cowardly refusing to replace output file. Use the -f/--force-rewrite options to force it.\n");
+            fprintf(stderr, "ERROR: Cowardly refusing to replace output file. Use the -f/--force-rewrite options to force it.\n");
             options.keep_output = true;
             return_code = 1;
             goto exit;
@@ -150,7 +150,7 @@ int main(int argc, char **argv) {
     out_file.open(options.out_filename.c_str(), std::ios::out|std::ios::binary);
     // Check if file was oppened correctly.
     if (!out_file.good()) {
-        fprintf(stderr, "Error: output file cannot be opened.\n");
+        fprintf(stderr, "ERROR: output file cannot be opened.\n");
         return_code = 1;
         goto exit;
     }
@@ -173,7 +173,7 @@ int main(int argc, char **argv) {
 
         return_code = image_to_ecm_block(in_file, out_file, &options);
         if (return_code) {
-            fprintf(stderr, "Error: there was an error processing the input file.\n");
+            fprintf(stderr, "\nERROR: there was an error processing the input file.\n");
             return_code = 1;
             goto exit;
         }
@@ -337,6 +337,8 @@ int image_to_ecm_block(
         &ecm_data_header,
         options
     );
+
+    printf("Disabled MSF optimization. current_sector: %d\n\n", ecm_data_header.optimizations);
 
     //
     // Time to write the streams header
@@ -544,6 +546,9 @@ int ecm_block_to_image(
         }
     }
 
+    // Set the optimization options used in file
+    options->optimizations = (optimization_options)ecm_data_header.optimizations;
+
     // Reset the counters
     resetcounter(ecm_block_header.block_size);
 
@@ -736,8 +741,9 @@ static ecmtool_return_code disk_analyzer (
                 ) {
                     // Sector contains wrong MSF, so it cannot be recovered in a lossless way
                     // To avoid this problem, we will disable the sector MSF optimization
-                    //printf("Disabled MSF optimization. current_sector: %d\n\n", current_sector);
                     ecm_data_header->optimizations = (optimization_options)(ecm_data_header->optimizations & ~OO_REMOVE_MSF);
+                    options->optimizations = (optimization_options)ecm_data_header->optimizations;
+                    //printf("Disabled MSF optimization. current_sector: %d, %d\n\n", current_sector, ecm_data_header->optimizations);
                 }
 
                 // Check if redundant FLAG can be regenerated (Only Mode 2 XA modes)
@@ -830,7 +836,7 @@ static ecmtool_return_code disk_encode (
     uint8_t out_sector[2352];
 
     // Hash
-    uint32_t input_edc;
+    uint32_t input_edc = 0;
     uint8_t buffer_edc[4];
 
     // Seek to the begin
@@ -1187,7 +1193,7 @@ int get_options(
                     options->audio_compression = C_FLAC;
                 }
                 else {
-                    fprintf(stderr, "Error: Unknown data compression mode: %s\n\n", optarg);
+                    fprintf(stderr, "ERROR: Unknown data compression mode: %s\n\n", optarg);
                     print_help();
                     return 1;
                 }
@@ -1206,7 +1212,7 @@ int get_options(
                     options->data_compression = C_LZ4;
                 }
                 else {
-                    fprintf(stderr, "Error: Unknown data compression mode: %s\n\n", optarg);
+                    fprintf(stderr, "ERROR: Unknown data compression mode: %s\n\n", optarg);
                     print_help();
                     return 1;
                 }
@@ -1219,7 +1225,7 @@ int get_options(
                     temp_argument = std::stoi(optarg_s);
 
                     if (temp_argument > 9 || temp_argument < 0) {
-                        fprintf(stderr, "Error: the provided compression level option is not correct.\n\n");
+                        fprintf(stderr, "ERROR: the provided compression level option is not correct.\n\n");
                         print_help();
                         return 1;
                     }
@@ -1227,7 +1233,7 @@ int get_options(
                         options->compression_level = (uint8_t)temp_argument;
                     }
                 } catch (std::exception const &e) {
-                    fprintf(stderr, "Error: the provided compression level option is not correct.\n\n");
+                    fprintf(stderr, "ERROR: the provided compression level option is not correct.\n\n");
                     print_help();
                     return 1;
                 }
@@ -1251,7 +1257,7 @@ int get_options(
                     temp_argument = std::stoi(optarg_s);
 
                     if (!temp_argument || temp_argument > 255 || temp_argument < 0) {
-                        fprintf(stderr, "Error: the provided sectors per block number is not correct.\n\n");
+                        fprintf(stderr, "ERROR: the provided sectors per block number is not correct.\n\n");
                         print_help();
                         return 1;
                     }
@@ -1259,7 +1265,7 @@ int get_options(
                         options->sectors_per_block = (uint8_t)temp_argument;
                     }
                 } catch (std::exception const &e) {
-                    fprintf(stderr, "Error: the provided sectors per block number is not correct.\n\n");
+                    fprintf(stderr, "ERROR: the provided sectors per block number is not correct.\n\n");
                     print_help();
                     return 1;
                 }
