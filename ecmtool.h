@@ -72,63 +72,6 @@ typedef unsigned __int32 uint32_t;
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////
-//
-// Figure out how big file offsets should be
-//
-#if defined(_OFF64_T_) || defined(_OFF64_T_DEFINED) || defined(__off64_t_defined)
-//
-// We have off64_t
-// Regular off_t may be smaller, so check this first
-//
-
-#ifdef off_t
-#undef off_t
-#endif
-#ifdef fseeko
-#undef fseeko
-#endif
-#ifdef ftello
-#undef ftello
-#endif
-
-#define off_t off64_t
-#define fseeko fseeko64
-#define ftello ftello64
-
-#elif defined(_OFF_T) || defined(__OFF_T_TYPE) || defined(__off_t_defined) || defined(_OFF_T_DEFINED_)
-//
-// We have off_t
-//
-
-#else
-//
-// Assume offsets are just 'long'
-//
-#ifdef off_t
-#undef off_t
-#endif
-#ifdef fseeko
-#undef fseeko
-#endif
-#ifdef ftello
-#undef ftello
-#endif
-
-#define off_t long
-#define fseeko fseek
-#define ftello ftell
-
-#endif
-
-////////////////////////////////////////////////////////////////////////////////
-
-void printfileerror(FILE *f, const char *name) {
-    printf("Error: ");
-    if(name) { printf("%s: ", name); }
-    printf("%s\n", f && feof(f) ? "Unexpected end-of-file" : strerror(errno));
-}
-
-////////////////////////////////////////////////////////////////////////////////
 
 // Streams and sectors structs
 #pragma pack(push, 1)
@@ -164,7 +107,9 @@ struct ecm_header {
     uint64_t sectors_toc_pos;
     uint64_t ecm_data_pos;
     uint8_t title_length;
+    uint8_t id_length;
     std::string title;
+    std::string id;
 };
 
 struct sec_str_size {
@@ -206,8 +151,6 @@ struct ecm_options {
     );
 };
 
-////////////////////////////////////////////////////////////////////////////////
-
 // Return codes
 enum ecmtool_return_code {
     ECMTOOL_OK = 0,
@@ -240,7 +183,8 @@ int get_options(
 int image_to_ecm_block(
     std::ifstream &in_file,
     std::fstream &out_file,
-    ecm_options *options
+    ecm_options *options,
+    std::vector<uint32_t> *sectors_type_sumary
 );
 int ecm_block_to_image(
     std::ifstream &in_file,
@@ -261,16 +205,6 @@ static ecmtool_return_code disk_analyzer (
     size_t image_file_size,
     std::vector<stream_script> &streams_script,
     ecm_header *ecm_data_header,
-    ecm_options *options
-);
-static ecmtool_return_code ecmify(
-    std::ifstream &in_file,
-    std::fstream &out_file,
-    ecm_options *options
-);
-static ecmtool_return_code unecmify(
-    const char *infilename,
-    const char *outfilename,
     ecm_options *options
 );
 int compress_header (
@@ -310,7 +244,7 @@ static ecmtool_return_code disk_encode (
     std::fstream &out_file,
     std::vector<stream_script> &streams_script,
     ecm_options *options,
-    uint32_t *sectors_type
+    std::vector<uint32_t> *sectors_type
 );
 static ecmtool_return_code disk_decode (
     sector_tools *sTools,
@@ -328,7 +262,7 @@ static void setcounter_encode(off_t n);
 static void setcounter_decode(off_t n);
 
 static void summary (
-    uint32_t *sectors,
+    std::vector<uint32_t> *sectors_type,
     ecm_options *options,
     sector_tools *sTools,
     size_t compressed_size

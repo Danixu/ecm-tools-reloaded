@@ -171,7 +171,9 @@ int main(int argc, char **argv) {
         file_blocks_toc.back().type = ECMFILE_BLOCK_TYPE_ECM;
         file_blocks_toc.back().start_position = out_file.tellp();
 
-        return_code = image_to_ecm_block(in_file, out_file, &options);
+        std::vector<uint32_t> sectors_type_sumary;
+        sectors_type_sumary.resize(13);
+        return_code = image_to_ecm_block(in_file, out_file, &options, &sectors_type_sumary);
         if (return_code) {
             fprintf(stderr, "\nERROR: there was an error processing the input file.\n");
             return_code = 1;
@@ -250,7 +252,8 @@ int main(int argc, char **argv) {
 int image_to_ecm_block(
     std::ifstream &in_file,
     std::fstream &out_file,
-    ecm_options *options
+    ecm_options *options,
+    std::vector<uint32_t> *sectors_type_sumary
 ) {
     // Input size
     in_file.seekg(0, std::ios_base::end);
@@ -259,9 +262,6 @@ int image_to_ecm_block(
 
     // Stream script to the encode process
     std::vector<stream_script> streams_script;
-
-    // Sectors sumary
-    uint32_t sectors_type_sumary[13] = {};
 
     // Sectors TOC
     sector *sectors_toc = NULL;
@@ -303,8 +303,12 @@ int image_to_ecm_block(
         0,
         0,
         0,
+        0,
+        "",
         ""
     };
+    // Struct size without the strings
+    uint32_t ecm_data_header_size = sizeof(ecm_data_header) - sizeof(ecm_data_header.title) - sizeof(ecm_data_header.id);
 
     // First blocks byte
     uint64_t block_start_position = out_file.tellp();
@@ -321,12 +325,13 @@ int image_to_ecm_block(
     ecm_block_start_position = out_file.tellp();
 
     // Write the ECM dummy header
-    out_file.write(reinterpret_cast<char*>(&ecm_data_header), sizeof(ecm_data_header) - sizeof(ecm_data_header.title));
+    out_file.write(reinterpret_cast<char*>(&ecm_data_header), ecm_data_header_size);
     if (!out_file.good()) {
         return_code = 1;
         goto exit;
     }
     out_file << ecm_data_header.title;
+    out_file << ecm_data_header.id;
 
     // Analyze the disk to detect the sectors types
     return_code = disk_analyzer (
@@ -337,8 +342,6 @@ int image_to_ecm_block(
         &ecm_data_header,
         options
     );
-
-    printf("Disabled MSF optimization. current_sector: %d\n\n", ecm_data_header.optimizations);
 
     //
     // Time to write the streams header
@@ -459,7 +462,7 @@ int image_to_ecm_block(
     }
 
     // Finally, write the ecm data block header
-    out_file.write(reinterpret_cast<char*>(&ecm_data_header), sizeof(ecm_data_header) - sizeof(ecm_data_header.title));
+    out_file.write(reinterpret_cast<char*>(&ecm_data_header), ecm_data_header_size);
     if (!out_file.good()) {
         return_code = 1;
         goto exit;
@@ -467,6 +470,7 @@ int image_to_ecm_block(
     out_file.seekp(0, std::ios_base::end);
 
     exit:
+    // Free the reserved memory for objects
     if (sTools) {
         delete sTools;
     }
@@ -481,6 +485,18 @@ int image_to_ecm_block(
     }
     if (sectors_toc_c_buffer) {
         delete [] sectors_toc_c_buffer;
+    }
+
+    if (!return_code) {
+        summary(sectors_type_sumary, options, sTools, (uint64_t)out_file.tellp());
+    }
+
+    // Close the files
+    if (in_file.is_open()){
+        in_file.close();
+    }
+    if (out_file.is_open()){
+        out_file.close();
     }
 
     return return_code;
@@ -500,6 +516,8 @@ int ecm_block_to_image(
     // ECM headers
     block_header ecm_block_header;
     ecm_header ecm_data_header;
+    // Struct size without the strings
+    uint32_t ecm_data_header_size = sizeof(ecm_data_header) - sizeof(ecm_data_header.title) - sizeof(ecm_data_header.id);
 
     // Will be setted later
     uint64_t ecm_block_start_position;
@@ -530,7 +548,7 @@ int ecm_block_to_image(
     ecm_block_start_position = in_file.tellg();
 
     // Read the ECM data header
-    in_file.read(reinterpret_cast<char*>(&ecm_data_header), sizeof(ecm_data_header));
+    in_file.read(reinterpret_cast<char*>(&ecm_data_header), ecm_data_header_size);
     if (!in_file.good()) {
         return_code = 1;
         goto exit;
@@ -540,6 +558,16 @@ int ecm_block_to_image(
     if (ecm_data_header.title_length) {
         ecm_data_header.title.resize(ecm_data_header.title_length);
         in_file.read((char *)ecm_data_header.title.data(), ecm_data_header.title_length);
+        if (!in_file.good()) {
+            return_code = 1;
+            goto exit;
+        }
+    }
+
+    // Read the ID stored in file if exists
+    if (ecm_data_header.id_length) {
+        ecm_data_header.id.resize(ecm_data_header.id_length);
+        in_file.read((char *)ecm_data_header.id.data(), ecm_data_header.id_length);
         if (!in_file.good()) {
             return_code = 1;
             goto exit;
@@ -829,7 +857,7 @@ static ecmtool_return_code disk_encode (
     std::fstream &out_file,
     std::vector<stream_script> &streams_script,
     ecm_options *options,
-    uint32_t *sectors_type
+    std::vector<uint32_t> *sectors_type
 ) {
     // Sectors buffers
     uint8_t in_sector[2352];
@@ -838,6 +866,9 @@ static ecmtool_return_code disk_encode (
     // Hash
     uint32_t input_edc = 0;
     uint8_t buffer_edc[4];
+
+    // Reference to sectors_type
+    std::vector<uint32_t>& sectors_type_ref = *sectors_type;
 
     // Seek to the begin
     in_file.seekg(0, std::ios_base::beg);
@@ -914,7 +945,7 @@ static ecmtool_return_code disk_encode (
                     return ECMTOOL_PROCESSING_ERROR;
                 }
 
-                sectors_type[streams_script[i].sectors_data[j].mode]++;
+                sectors_type_ref[streams_script[i].sectors_data[j].mode]++;
 
                 // Compress the sector using the selected compression (or none)
                 switch (streams_script[i].stream_data.compression) {
@@ -1568,213 +1599,15 @@ void print_help() {
 }
 
 
-
-/*
-static ecmtool_return_code unecmify(
-    const char *infilename,
-    const char *outfilename,
-    ecm_options *options
+static void summary(
+    std::vector<uint32_t> *sectors_type,
+    ecm_options *options,
+    sector_tools *sTools,
+    size_t compressed_size
 ) {
-    // IN/OUT files definition
-    FILE *in  = NULL;
-    FILE *out = NULL;
-    ecmtool_return_code return_code = ECMTOOL_OK;
-
-    if (!options->force_rewrite) {
-        out = fopen(outfilename, "rb");
-        if (out) {
-            fprintf(stderr, "Error: %s exists; refusing to overwrite. Use the -f argument to force the overwrite.\n", outfilename);
-            fclose(out);
-            return ECMTOOL_FILE_WRITE_ERROR;
-        }
-    }
-
-    // Buffers for IN/Out files
-    char *in_buffer = NULL;
-    char *out_buffer = NULL;
-
-    // Total input size
-    size_t in_total_size;
-
-    // Streams TOC
-    stream *streams_toc = NULL;
-    sec_str_size streams_toc_count = {0, 0};
-
-    // Sectors TOC
-    sector *sectors_toc;
-    sec_str_size sectors_toc_count = {0, 0};
-    char *sectors_toc_c_buffer;
-
-    // Sector Tools object
-    sector_tools *sTools;
-
-    // Stream script to the encode process
-    std::vector<stream_script> streams_script;
-
-    // Buffers initialization
-    // Allocate input buffer space
-    in_buffer = (char*) malloc(BUFFER_SIZE);
-    if(!in_buffer) {
-        fprintf(stderr, "Out of memory\n");
-        return_code = ECMTOOL_BUFFER_MEMORY_ERROR;
-        goto exit_unecmify;
-    }
-    // Allocate output buffer space
-    out_buffer = (char*) malloc(BUFFER_SIZE);
-    if(!out_buffer) {
-        fprintf(stderr, "Out of memory\n");
-        return_code = ECMTOOL_BUFFER_MEMORY_ERROR;
-        goto exit_unecmify;
-    }
-
-    // Open input file
-    in = fopen(infilename, "rb");
-    if (!in) {
-        printfileerror(in, infilename);
-        return_code = ECMTOOL_FILE_READ_ERROR;
-        goto exit_unecmify;
-    }
-    setvbuf(in, in_buffer, _IOFBF, BUFFER_SIZE);
-    // Getting the input size to set the progress
-    fseeko(in, 0, SEEK_END);
-    in_total_size = ftello(in);
-    fseeko(in, 5, SEEK_SET);
-    // Reset the counters
-    resetcounter(in_total_size);
-    // Open output file
-    out = fopen(outfilename, "wb");
-    if (!in) {
-        printfileerror(out, outfilename);
-        return_code = ECMTOOL_FILE_WRITE_ERROR;
-        goto exit_unecmify;
-    }
-    setvbuf(out, out_buffer, _IOFBF, BUFFER_SIZE);
-
-    // Get the options used at file creation
-    fread(&options->optimizations, sizeof(options->optimizations), 1, in);
-
-    // Streams TOC
-    fread(&streams_toc_count, sizeof(streams_toc_count), 1, in);
-    streams_toc = new stream[streams_toc_count.count + 1];
-    if (sizeof(streams_toc) > streams_toc_count.size) {
-        // There was an error in the header
-        fprintf(stderr, "Corrupted header.\n");
-        return_code = ECMTOOL_CORRUPTED_HEADER;
-        goto exit_unecmify;
-    }
-    fread(streams_toc, streams_toc_count.size, 1, in);
-
-    // Sectors TOC
-    fread(&sectors_toc_count, sizeof(sectors_toc_count), 1, in);
-    sectors_toc = new sector[sectors_toc_count.count + 1];
-    sectors_toc_c_buffer = (char*) malloc(sectors_toc_count.size);
-    if(!sectors_toc_c_buffer) {
-        fprintf(stderr, "Out of memory\n");
-        return_code = ECMTOOL_BUFFER_MEMORY_ERROR;
-    }
-    if (return_code) {
-        goto exit_unecmify;
-    }
-
-    // Decompress the header
-    {
-        uint32_t out_size = (sectors_toc_count.count + 1) * sizeof(struct sector);
-        fread(sectors_toc_c_buffer, sectors_toc_count.size, 1, in);
-
-        if (
-            decompress_header(
-                (uint8_t*)sectors_toc,
-                out_size, 
-                (uint8_t*)sectors_toc_c_buffer,
-                sectors_toc_count.size
-            )
-        ) {
-            fprintf(stderr, "There was an error reading the header\n");
-            return_code = ECMTOOL_CORRUPTED_HEADER;
-        }
-        if (return_code) {
-            goto exit_unecmify;
-        }
-    }
-
-    // Initializing the Sector Tools object
-    sTools = new sector_tools();
-
-    // Convert the headers to an script to be easily followed by the decoder
-    return_code = task_maker (
-        streams_toc,
-        streams_toc_count,
-        sectors_toc,
-        sectors_toc_count,
-        streams_script
-    );
-    if (return_code) {
-        return_code = ECMTOOL_CORRUPTED_STREAM;
-        goto exit_unecmify;
-    }
-
-    return_code = disk_decode (
-        sTools,
-        in,
-        out,
-        streams_script,
-        options
-    );
-
-    exit_unecmify:
-    // Free the compressed buffer
-    if(sectors_toc_c_buffer) {
-        free(sectors_toc_c_buffer);
-    }
-    // Flushing data and closing files
-    size_t in_size = ftello(in);
-    if (in) {
-        fclose(in);
-    }
-    size_t out_size = ftello(out);
-    if (out) {
-        fflush(out);
-        fclose(out);
-    }
-    
-    // Freeing reserved memory
-    if (in_buffer) {
-        free(in_buffer);
-    }
-    if (out_buffer) {
-        free(out_buffer);
-    }
-    if (sectors_toc) {
-        delete[] sectors_toc;
-    }
-    if (streams_toc) {
-        delete[] streams_toc;
-    }
-    if (sTools) {
-        delete sTools;
-    }
-
-    // If something went wrong, inform the user and delete the output file
-    if (!return_code) {
-        fprintf(stdout, "Decoding completed successfully!\n\n");
-        fprintf(stdout, "Sumary:\n");
-        fprintf(stdout, "\tECM Size: %d bytes -> Original size: %d bytes\n\n", in_size, out_size);
-    }
-    else {
-        fprintf(stderr, "\n\nThere was an error processing the input file: %d\n\n", return_code);
-        // We will remove the file if something went wrong
-        if (!options->keep_output) {
-            if (remove(outfilename)) {
-                fprintf(stderr, "There was an error removing the output file... Please remove it manually.\n");
-            }
-        }
-    }
-    return return_code;
-}
-
-
-static void summary(uint32_t *sectors, ecm_options *options, sector_tools *sTools, size_t compressed_size) {
     uint16_t optimized_sector_sizes[13];
+    // Reference to sectors_type
+    std::vector<uint32_t>& sectors_type_ref = *sectors_type;
 
     // Calculate the size per sector type
     for (uint8_t i = 1; i < 13; i++) {
@@ -1791,7 +1624,7 @@ static void summary(uint32_t *sectors, ecm_options *options, sector_tools *sTool
     // Total sectors
     uint32_t total_sectors = 0;
     for (uint8_t i = 1; i < 13; i++) {
-        total_sectors += sectors[i];
+        total_sectors += sectors_type_ref[i];
     }
 
     // Total size
@@ -1800,7 +1633,7 @@ static void summary(uint32_t *sectors, ecm_options *options, sector_tools *sTool
     // ECM size without compression
     size_t ecm_size = 0;
     for (uint8_t i = 1; i < 13; i++) {
-        ecm_size += sectors[i] * optimized_sector_sizes[i];
+        ecm_size += sectors_type_ref[i] * optimized_sector_sizes[i];
     }
 
     fprintf(stdout, "\n\n");
@@ -1808,18 +1641,18 @@ static void summary(uint32_t *sectors, ecm_options *options, sector_tools *sTool
     fprintf(stdout, "------------------------------------------------------------\n");
     fprintf(stdout, " Type               Sectors         In Size        Out Size\n");
     fprintf(stdout, "------------------------------------------------------------\n");
-    fprintf(stdout, "CDDA ............... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[1], MB(sectors[1] * 2352), MB(sectors[1] * optimized_sector_sizes[1])); 
-    fprintf(stdout, "CDDA Gap ........... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[2], MB(sectors[2] * 2352), MB(sectors[2] * optimized_sector_sizes[2]));
-    fprintf(stdout, "Mode 1 ............. %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[3], MB(sectors[3] * 2352), MB(sectors[3] * optimized_sector_sizes[3]));
-    fprintf(stdout, "Mode 1 Gap ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[4], MB(sectors[4] * 2352), MB(sectors[4] * optimized_sector_sizes[4]));
-    fprintf(stdout, "Mode 1 RAW ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[5], MB(sectors[5] * 2352), MB(sectors[5] * optimized_sector_sizes[5]));
-    fprintf(stdout, "Mode 2 ............. %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[6], MB(sectors[6] * 2352), MB(sectors[6] * optimized_sector_sizes[6]));
-    fprintf(stdout, "Mode 2 Gap ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[7], MB(sectors[7] * 2352), MB(sectors[7] * optimized_sector_sizes[7]));
-    fprintf(stdout, "Mode 2 XA1 ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[8], MB(sectors[8] * 2352), MB(sectors[8] * optimized_sector_sizes[8]));
-    fprintf(stdout, "Mode 2 XA1 Gap ..... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[9], MB(sectors[9] * 2352), MB(sectors[9] * optimized_sector_sizes[9]));
-    fprintf(stdout, "Mode 2 XA2 ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[10], MB(sectors[10] * 2352), MB(sectors[10] * optimized_sector_sizes[10]));
-    fprintf(stdout, "Mode 2 XA2 Gap ..... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[11], MB(sectors[11] * 2352), MB(sectors[11] * optimized_sector_sizes[11]));
-    fprintf(stdout, "Unknown data ....... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors[12], MB(sectors[12] * 2352), MB(sectors[12] * optimized_sector_sizes[12]));
+    fprintf(stdout, "CDDA ............... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors_type_ref[1], MB(sectors_type_ref[1] * 2352), MB(sectors_type_ref[1] * optimized_sector_sizes[1])); 
+    fprintf(stdout, "CDDA Gap ........... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors_type_ref[2], MB(sectors_type_ref[2] * 2352), MB(sectors_type_ref[2] * optimized_sector_sizes[2]));
+    fprintf(stdout, "Mode 1 ............. %6d ...... %6.2fMB ...... %6.2fMB\n", sectors_type_ref[3], MB(sectors_type_ref[3] * 2352), MB(sectors_type_ref[3] * optimized_sector_sizes[3]));
+    fprintf(stdout, "Mode 1 Gap ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors_type_ref[4], MB(sectors_type_ref[4] * 2352), MB(sectors_type_ref[4] * optimized_sector_sizes[4]));
+    fprintf(stdout, "Mode 1 RAW ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors_type_ref[5], MB(sectors_type_ref[5] * 2352), MB(sectors_type_ref[5] * optimized_sector_sizes[5]));
+    fprintf(stdout, "Mode 2 ............. %6d ...... %6.2fMB ...... %6.2fMB\n", sectors_type_ref[6], MB(sectors_type_ref[6] * 2352), MB(sectors_type_ref[6] * optimized_sector_sizes[6]));
+    fprintf(stdout, "Mode 2 Gap ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors_type_ref[7], MB(sectors_type_ref[7] * 2352), MB(sectors_type_ref[7] * optimized_sector_sizes[7]));
+    fprintf(stdout, "Mode 2 XA1 ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors_type_ref[8], MB(sectors_type_ref[8] * 2352), MB(sectors_type_ref[8] * optimized_sector_sizes[8]));
+    fprintf(stdout, "Mode 2 XA1 Gap ..... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors_type_ref[9], MB(sectors_type_ref[9] * 2352), MB(sectors_type_ref[9] * optimized_sector_sizes[9]));
+    fprintf(stdout, "Mode 2 XA2 ......... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors_type_ref[10], MB(sectors_type_ref[10] * 2352), MB(sectors_type_ref[10] * optimized_sector_sizes[10]));
+    fprintf(stdout, "Mode 2 XA2 Gap ..... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors_type_ref[11], MB(sectors_type_ref[11] * 2352), MB(sectors_type_ref[11] * optimized_sector_sizes[11]));
+    fprintf(stdout, "Unknown data ....... %6d ...... %6.2fMB ...... %6.2fMB\n", sectors_type_ref[12], MB(sectors_type_ref[12] * 2352), MB(sectors_type_ref[12] * optimized_sector_sizes[12]));
     fprintf(stdout, "-------------------------------------------------------------\n");
     fprintf(stdout, "Total .............. %6d ...... %6.2fMb ...... %6.2fMb\n", total_sectors, MB(total_size), MB(ecm_size));
     fprintf(stdout, "ECM reduction (input vs ecm) ..................... %2.2f%%\n", (1.0 - ((float)ecm_size / total_size)) * 100);
@@ -1835,24 +1668,3 @@ static void summary(uint32_t *sectors, ecm_options *options, sector_tools *sTool
     fprintf(stdout, "-------------------------------------------------------------\n");
     fprintf(stdout, "Total reduction (input vs output) ...... %2.2f%%\n", abs((1.0 - ((float)compressed_size / total_size)) * 100));
 }
-
-
-void print_task(
-    std::vector<stream_script> &streams_script
-) {
-    size_t actual_sector = 0;
-
-    for (uint32_t i = 0; i < streams_script.size(); i++) {
-        fprintf(stdout, "Stream %d - last sector %d - sectors type count %d.\n", i, streams_script[i].stream_data.end_sector, streams_script[i].sectors_data.size());
-
-        for (uint32_t j = 0; j < streams_script[i].sectors_data.size(); j++) {
-            fprintf(stdout, "Actual_sector: %d - Sector count: %d.\n", actual_sector, streams_script[i].sectors_data[j].sector_count);
-            actual_sector += streams_script[i].sectors_data[j].sector_count;
-        }
-
-        if (actual_sector != streams_script[i].stream_data.end_sector) {
-            fprintf(stdout, "End sector doesn't match\n");
-        }
-    }
-}
-*/
