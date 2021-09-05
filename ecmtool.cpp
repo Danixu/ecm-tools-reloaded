@@ -22,10 +22,10 @@
 #define ECM_FILE_VERSION 3
 
 // Some necessary variables
-static uint8_t mycounter_analyze = (off_t)-1;
-static uint8_t mycounter_encode  = (off_t)-1;
-static off_t mycounter_decode  = (off_t)-1;
-static off_t mycounter_total   = 0;
+static uint8_t mycounter_analyze = (uint64_t)0;
+static uint8_t mycounter_encode  = (uint64_t)0;
+static uint64_t mycounter_decode  = (uint64_t)0;
+static uint64_t mycounter_total   = 0;
 
 static struct option long_options[] = {
     {"input", required_argument, NULL, 'i'},
@@ -178,6 +178,13 @@ int main(int argc, char **argv) {
             fprintf(stderr, "\nERROR: there was an error processing the input file.\n");
             return_code = 1;
             goto exit;
+        }
+        else {
+            summary(
+                &sectors_type_sumary,
+                &options,
+                (uint64_t)out_file.tellp() - file_blocks_toc.back().start_position
+            );
         }
 
         // Write the Table of content
@@ -485,18 +492,6 @@ int image_to_ecm_block(
     }
     if (sectors_toc_c_buffer) {
         delete [] sectors_toc_c_buffer;
-    }
-
-    if (!return_code) {
-        summary(sectors_type_sumary, options, sTools, (uint64_t)out_file.tellp());
-    }
-
-    // Close the files
-    if (in_file.is_open()){
-        in_file.close();
-    }
-    if (out_file.is_open()){
-        out_file.close();
     }
 
     return return_code;
@@ -1160,6 +1155,9 @@ static ecmtool_return_code disk_decode (
         }
     }
 
+    // Set the decode position to 100%
+    setcounter_decode((uint64_t)in_file.tellg());
+
     // There is no more data in header. Next 4 bytes might be the CRC
     // Reading it...
     uint8_t buffer_edc[4];
@@ -1323,7 +1321,7 @@ int get_options(
 }
 
 
-static void resetcounter(off_t total) {
+static void resetcounter(uint64_t total) {
     mycounter_analyze = 0;
     mycounter_encode  = 0;
     mycounter_decode  = 0;
@@ -1344,14 +1342,17 @@ static void encode_progress(void) {
 
 
 static void decode_progress(void) {
+    /*
     fprintf(stderr,
         "Decode(%02u%%)\r",
         mycounter_decode
     );
+    */
+    std::cerr << "Decode(" << std::setfill('0') << std::setw(2) << unsigned(mycounter_decode) << "%)\r";
 }
 
 
-static void setcounter_analyze(off_t n) {
+static void setcounter_analyze(uint64_t n) {
     uint8_t p = 100 * n / mycounter_total;
     if (p != mycounter_analyze) {
         mycounter_analyze = p;
@@ -1360,7 +1361,7 @@ static void setcounter_analyze(off_t n) {
 }
 
 
-static void setcounter_encode(off_t n) {
+static void setcounter_encode(uint64_t n) {
     uint8_t p = 100 * n / mycounter_total;
     if (p != mycounter_encode) {
         mycounter_encode = p;
@@ -1369,7 +1370,7 @@ static void setcounter_encode(off_t n) {
 }
 
 
-static void setcounter_decode(off_t n) {
+static void setcounter_decode(uint64_t n) {
     uint8_t p = 100 * n / mycounter_total;
     if (p != mycounter_decode) {
         mycounter_decode = p;
@@ -1602,7 +1603,6 @@ void print_help() {
 static void summary(
     std::vector<uint32_t> *sectors_type,
     ecm_options *options,
-    sector_tools *sTools,
     size_t compressed_size
 ) {
     uint16_t optimized_sector_sizes[13];
@@ -1613,7 +1613,7 @@ static void summary(
     for (uint8_t i = 1; i < 13; i++) {
         size_t bytes_to_read = 0;
         // Getting the sector size prior to read, to read the real sector size and avoid to fseek every time
-        sTools->encoded_sector_size(
+        sector_tools::encoded_sector_size(
             (sector_tools_types)i,
             bytes_to_read,
             options->optimizations

@@ -254,17 +254,16 @@ static ecmtool_return_code disk_decode (
     ecm_options *options,
     uint64_t ecm_block_start_position
 );
-static void resetcounter(off_t total);
+static void resetcounter(uint64_t total);
 static void encode_progress(void);
 static void decode_progress(void);
-static void setcounter_analyze(off_t n);
-static void setcounter_encode(off_t n);
-static void setcounter_decode(off_t n);
+static void setcounter_analyze(uint64_t n);
+static void setcounter_encode(uint64_t n);
+static void setcounter_decode(uint64_t n);
 
 static void summary (
     std::vector<uint32_t> *sectors_type,
     ecm_options *options,
-    sector_tools *sTools,
     size_t compressed_size
 );
 
