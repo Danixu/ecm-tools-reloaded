@@ -180,7 +180,6 @@ int main(int argc, char **argv) {
             goto exit;
         }
         else {
-            fprintf(stdout, "\n\nOK: Everything was processed without errors\n\n");
             summary(
                 &sectors_type_sumary,
                 &options,
@@ -368,7 +367,8 @@ int image_to_ecm_block(
         out_file,
         streams_script,
         options,
-        sectors_type_sumary
+        sectors_type_sumary,
+        ecm_data_header.ecm_data_pos
     );
     if (return_code) {
         goto exit;
@@ -378,7 +378,7 @@ int image_to_ecm_block(
     // Streams and Sectors TOC will be wrritten at the end because streams is modified
     // during the encoding process with required data if compression was used.
     //
-        //
+    //
     // Time to write the streams header
     //
     ecm_data_header.streams_toc_pos = (uint64_t)out_file.tellp() - ecm_block_start_position;
@@ -655,7 +655,7 @@ int ecm_block_to_image(
         out_file,
         streams_script,
         options,
-        ecm_block_start_position
+        ecm_data_header.ecm_data_pos
     );
 
     exit:
@@ -861,7 +861,8 @@ static ecmtool_return_code disk_encode (
     std::fstream &out_file,
     std::vector<stream_script> &streams_script,
     ecm_options *options,
-    std::vector<uint32_t> *sectors_type
+    std::vector<uint32_t> *sectors_type,
+    uint64_t ecm_block_start_position
 ) {
     // Sectors buffers
     uint8_t in_sector[2352];
@@ -1010,22 +1011,7 @@ static ecmtool_return_code disk_encode (
             free(comp_buffer);
         }
     
-        ///////////////////////////////////////////////////////////////////////////////////
-        ///////////////////////////////////////////////////////////////////////////////////
-        ///////////////////////////////////////////////////////////////////////////////////
-        ///////////////////////////////////////////////////////////////////////////////////
-        ///////////////////////////////////////////////////////////////////////////////////
-        ///////////////////////////////////////////////////////////////////////////////////
-        ///////////////////////////////////////////////////////////////////////////////////
-        ///////////////////////////////////////////////////////////////////////////////////
-        ///////////////////////////////////////////////////////////////////////////////////
-        ///////////////////////////////////////////////////////////////////////////////////
-        ///////////////////////////////////////////////////////////////////////////////////
-        ///////////////////////////////////////////////////////////////////////////////////
-        ///////////////////////////////////////////////////////////////////////////////////
-        ///////////////////////////////////////////////////////////////////////////////////
-        streams_script[i].stream_data.out_end_position = out_file.tellp(); // Must be fixed to relative position
-
+        streams_script[i].stream_data.out_end_position = (uint64_t)out_file.tellp() - ecm_block_start_position;
     }
 
     // Write the CRC
@@ -1072,7 +1058,7 @@ static ecmtool_return_code disk_decode (
             }
             // Check if stream size is smaller than the buffer size and use the smaller size as "to_read"
             size_t to_read = BUFFER_SIZE;
-            size_t stream_size = streams_script[i].stream_data.out_end_position - (uint64_t)in_file.tellg();
+            size_t stream_size = streams_script[i].stream_data.out_end_position - ((uint64_t)in_file.tellg() - ecm_block_start_position);
             if (to_read > stream_size) {
                 to_read = stream_size;
             }
@@ -1130,7 +1116,7 @@ static ecmtool_return_code disk_decode (
                         // Calculate how much data can be readed
                         size_t to_read = BUFFER_SIZE - decompress_buffer_left;
                         // If available space is bigger than data in stream, read only the stream data
-                        size_t stream_size = streams_script[i].stream_data.out_end_position - (uint64_t)in_file.tellg();
+                        size_t stream_size = streams_script[i].stream_data.out_end_position - ((uint64_t)in_file.tellg() - ecm_block_start_position);
                         if (to_read > stream_size) {
                             to_read = stream_size;  
                             // If left data is less than buffer space, then end_of_stream is reached

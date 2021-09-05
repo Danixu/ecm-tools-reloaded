@@ -244,7 +244,8 @@ static ecmtool_return_code disk_encode (
     std::fstream &out_file,
     std::vector<stream_script> &streams_script,
     ecm_options *options,
-    std::vector<uint32_t> *sectors_type
+    std::vector<uint32_t> *sectors_type,
+    uint64_t ecm_block_start_position
 );
 static ecmtool_return_code disk_decode (
     sector_tools *sTools,
