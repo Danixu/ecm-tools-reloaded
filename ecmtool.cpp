@@ -22,9 +22,9 @@
 #define ECM_FILE_VERSION 3
 
 // Some necessary variables
-static uint8_t mycounter_analyze = (uint64_t)0;
-static uint8_t mycounter_encode  = (uint64_t)0;
-static uint64_t mycounter_decode  = (uint64_t)0;
+static uint8_t mycounter_analyze = 0;
+static uint8_t mycounter_encode  = 0;
+static uint64_t mycounter_decode  = 0;
 static uint64_t mycounter_total   = 0;
 
 static struct option long_options[] = {
@@ -175,11 +175,12 @@ int main(int argc, char **argv) {
         sectors_type_sumary.resize(13);
         return_code = image_to_ecm_block(in_file, out_file, &options, &sectors_type_sumary);
         if (return_code) {
-            fprintf(stderr, "\nERROR: there was an error processing the input file.\n");
+            fprintf(stderr, "\n\nERROR: there was an error processing the input file.\n\n");
             return_code = 1;
             goto exit;
         }
         else {
+            fprintf(stdout, "\n\nOK: Everything was processed without errors\n\n");
             summary(
                 &sectors_type_sumary,
                 &options,
@@ -221,6 +222,7 @@ int main(int argc, char **argv) {
             if (file_blocks_toc[i].type == ECMFILE_BLOCK_TYPE_ECM) {
                 in_file.seekg(file_blocks_toc[i].start_position, std::ios_base::beg);
                 return_code = ecm_block_to_image(in_file, out_file, &options);
+                if (return_code) { break; }
             }
         }
     }
@@ -242,6 +244,7 @@ int main(int argc, char **argv) {
         if (!options.keep_output) {
             // Something went wrong, so output file must be deleted if keep == false
             // We will remove the file if something went wrong
+            fprintf(stderr, "\n\nERROR: there was an error processing the input file.\n\n");
             std::ifstream out_remove_tmp(options.out_filename.c_str(), std::ios::binary);
             char dummy;
             if (out_remove_tmp.read(&dummy, 0)) {
