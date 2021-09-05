@@ -238,7 +238,8 @@ int main(int argc, char **argv) {
     if (return_code == 0) {
         auto stop = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
-        printf("\n\nTotal execution time: %0.3fs\n\n", duration.count() / 1000.0F);
+        fprintf(stdout, "\n\nThe file was processed without any problem\n");
+        fprintf(stdout, "Total execution time: %0.3fs\n\n", duration.count() / 1000.0F);
     }
     else {
         if (!options.keep_output) {
@@ -354,6 +355,30 @@ int image_to_ecm_block(
     );
 
     //
+    // Now we will write the ECM data header
+    //
+    ecm_data_header.ecm_data_pos = (uint64_t)out_file.tellp() - ecm_block_start_position;
+
+    //
+    // Convert the image to ECM data
+    //
+    return_code = disk_encode (
+        sTools,
+        in_file,
+        out_file,
+        streams_script,
+        options,
+        sectors_type_sumary
+    );
+    if (return_code) {
+        goto exit;
+    }
+
+    //
+    // Streams and Sectors TOC will be wrritten at the end because streams is modified
+    // during the encoding process with required data if compression was used.
+    //
+        //
     // Time to write the streams header
     //
     ecm_data_header.streams_toc_pos = (uint64_t)out_file.tellp() - ecm_block_start_position;
@@ -439,25 +464,6 @@ int image_to_ecm_block(
     free(sectors_toc_c_buffer);
     sectors_toc_c_buffer = NULL;
 
-    //
-    // Now we will write the ECM data header
-    //
-    ecm_data_header.ecm_data_pos = (uint64_t)out_file.tellp() - ecm_block_start_position;
-
-    //
-    // Convert the image to ECM data
-    //
-    return_code = disk_encode (
-        sTools,
-        in_file,
-        out_file,
-        streams_script,
-        options,
-        sectors_type_sumary
-    );
-    if (return_code) {
-        goto exit;
-    }
 
     // Set the block sizes. Both are equal because this block will not use compression
     ecm_block_header.real_block_size = (uint64_t)out_file.tellp() - ecm_block_start_position;
@@ -1004,7 +1010,22 @@ static ecmtool_return_code disk_encode (
             free(comp_buffer);
         }
     
-        streams_script[i].stream_data.out_end_position = out_file.tellp();
+        ///////////////////////////////////////////////////////////////////////////////////
+        ///////////////////////////////////////////////////////////////////////////////////
+        ///////////////////////////////////////////////////////////////////////////////////
+        ///////////////////////////////////////////////////////////////////////////////////
+        ///////////////////////////////////////////////////////////////////////////////////
+        ///////////////////////////////////////////////////////////////////////////////////
+        ///////////////////////////////////////////////////////////////////////////////////
+        ///////////////////////////////////////////////////////////////////////////////////
+        ///////////////////////////////////////////////////////////////////////////////////
+        ///////////////////////////////////////////////////////////////////////////////////
+        ///////////////////////////////////////////////////////////////////////////////////
+        ///////////////////////////////////////////////////////////////////////////////////
+        ///////////////////////////////////////////////////////////////////////////////////
+        ///////////////////////////////////////////////////////////////////////////////////
+        streams_script[i].stream_data.out_end_position = out_file.tellp(); // Must be fixed to relative position
+
     }
 
     // Write the CRC
