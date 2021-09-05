@@ -334,15 +334,6 @@ int image_to_ecm_block(
     // First ECM block byte
     ecm_block_start_position = out_file.tellp();
 
-    // Write the ECM dummy header
-    out_file.write(reinterpret_cast<char*>(&ecm_data_header), ecm_data_header_size);
-    if (!out_file.good()) {
-        return_code = 1;
-        goto exit;
-    }
-    out_file << ecm_data_header.title;
-    out_file << ecm_data_header.id;
-
     // Analyze the disk to detect the sectors types
     return_code = disk_analyzer (
         sTools,
@@ -352,6 +343,15 @@ int image_to_ecm_block(
         &ecm_data_header,
         options
     );
+
+    // Write the ECM dummy header
+    out_file.write(reinterpret_cast<char*>(&ecm_data_header), ecm_data_header_size);
+    if (!out_file.good()) {
+        return_code = 1;
+        goto exit;
+    }
+    out_file << ecm_data_header.title;
+    out_file << ecm_data_header.id;
 
     //
     // Now we will write the ECM data header
@@ -747,6 +747,10 @@ static ecmtool_return_code disk_analyzer (
     // Seek to the begin
     in_file.seekg(0, std::ios_base::beg);
 
+    // ID Detection
+    std::string id;
+    int id_detection_return = -1;
+
     // Loop through all the sectors
     for (size_t i = 0; i < sectors_count; i++) {
         // Read a sector
@@ -757,6 +761,15 @@ static ecmtool_return_code disk_analyzer (
 
             sector_tools_types detected_type = sTools->detect(in_sector);
             //printf("Current sector: %d -> Type: %d\n", current_sector, detected_type);
+
+            // Try to detect the game ID to add it to header
+            if (id_detection_return != 0) {
+                id_detection_return = detect_id_psx(id, in_sector, 2352);
+                if (id_detection_return == 0) {
+                    ecm_data_header->id = id;
+                    ecm_data_header->id_length = id.length();
+                }
+            }            
 
             //printf("Detected sector type: %d\n", detected_type);
 
@@ -1677,4 +1690,41 @@ static void summary(
     fprintf(stdout, " Output summary\n");
     fprintf(stdout, "-------------------------------------------------------------\n");
     fprintf(stdout, "Total reduction (input vs output) ...... %2.2f%%\n", abs((1.0 - ((float)compressed_size / total_size)) * 100));
+}
+
+/**
+ * @brief Function to detect the PSX game ID. It reads the entire block and try to find the ID's codes.
+ * 
+ * @param id String to store the detected ID
+ * @param data Data where to search
+ * @param data_size Data size
+ * @return int: -1 if was not found, 0 if was found, 1 if there was an error
+ */
+int detect_id_psx(std::string &id, uint8_t *data, uint64_t data_size) {
+    // if length is less than the min size, return error
+    if (data_size < 11) {
+        return 1;
+    }
+    // Step through the data to try to detect the ID
+    for (uint64_t i = 0; i < data_size - 11; i++) {
+        // if bytes are similar to S##S_###.##, then return its data
+        if (
+            data[i] == 'S' &&
+            data[i + 3] == 'S' &&
+            data[i + 4] == '_' &&
+            data[i + 8] == '.'
+        ) {
+            id += data[i];
+            id += data[i + 1];
+            id += data[i + 2];
+            id += data[i + 3];
+            id += data[i + 5];
+            id += data[i + 6];
+            id += data[i + 7];
+            id += data[i + 9];
+            id += data[i + 10];
+            return 0;
+        }
+    }
+    return -1;
 }

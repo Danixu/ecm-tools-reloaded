@@ -272,6 +272,8 @@ void print_task(
     std::vector<stream_script> &streams_script
 );
 
+int detect_id_psx(std::string &id, uint8_t *data, uint64_t data_size);
+
 /*
 void write_to_file(std::string filename, uint8_t *data, uint64_t size) {
     FILE *out_file = fopen(filename.c_str(), "wb");
