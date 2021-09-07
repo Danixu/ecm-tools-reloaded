@@ -40,7 +40,7 @@ compressor::compressor(sector_tools_compression mode, bool is_compression, int32
         }
         
         if (ret != Z_OK) {
-            printf("There was an error initializing the ZLIB encoder/decoder\n");
+            fprintf_s(stderr, "There was an error initializing the ZLIB encoder/decoder\n");
             //throw std::runtime_error("Error initializing the zlib compressor/decompressor.");
         }
 
@@ -69,7 +69,7 @@ compressor::compressor(sector_tools_compression mode, bool is_compression, int32
 
         // Return successfully if the initialization went fine.
         if (ret != LZMA_OK) {
-            printf("There was an error initializing LZMA encoder/decoder\n");
+            fprintf_s(stderr, "There was an error initializing LZMA encoder/decoder\n");
             //throw std::runtime_error("Error initializing the lzma2 compressor/decompressor.");
         }
 
