@@ -1,5 +1,11 @@
 # Changelog
 
+### v3.0.0-alpha
+
+* The program uses a new output format (ECM2v3).
+* This new format allows to add some metadata and multiple images, but is not implemented yet.
+* With this new format the streams TOC header can be compressed, so now zlib is used in this header too.
+
 ### v2.3.2-alpha
 
 * Now the program disables de redundant FLAG cleanup if cannot be recovered on decoding. Some games copy protections includes wrong redundant FLAG.
