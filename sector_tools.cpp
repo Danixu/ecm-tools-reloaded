@@ -419,7 +419,7 @@ int8_t sector_tools::read_type_count(
             (bits > 31) ||
             ((uint32_t)(c & 0x7F)) >= (((uint32_t)0x80000000LU) >> (bits-1))
         ) {
-            fprintf_s(stderr, "Invalid sector count\n");
+            fprintf(stderr, "Invalid sector count\n");
             return -1;
         }
         count |= ((uint32_t)(c & 0x7F)) << bits;
@@ -458,7 +458,7 @@ int8_t sector_tools::read_stream_type_count(
             (bits > 31) ||
             ((uint32_t)(c & 0x7F)) >= (((uint32_t)0x80000000LU) >> (bits-1))
         ) {
-            fprintf_s(stderr, "Invalid sector count\n");
+            fprintf(stderr, "Invalid sector count\n");
             return -1;
         }
         count |= ((uint32_t)(c & 0x7F)) << bits;
