@@ -787,7 +787,6 @@ static ecmtool_return_code disk_analyzer (
                     // Sector contains wrong MSF, so it cannot be recovered in a lossless way
                     // To avoid this problem, we will disable the sector MSF optimization
                     ecm_data_header->optimizations = (optimization_options)(ecm_data_header->optimizations & ~OO_REMOVE_MSF);
-                    options->optimizations = (optimization_options)ecm_data_header->optimizations;
                     //printf("Disabled MSF optimization. current_sector: %d, %d\n\n", current_sector, ecm_data_header->optimizations);
                 }
 
@@ -813,6 +812,9 @@ static ecmtool_return_code disk_analyzer (
                     ecm_data_header->optimizations = (optimization_options)(ecm_data_header->optimizations & ~OO_REMOVE_REDUNDANT_FLAG);
                 }
             }
+
+            // Replace the current optimization options to match the header optimizations
+            options->optimizations = (optimization_options)ecm_data_header->optimizations;
 
             sector_tools_stream_types stream_type = sTools->detect_stream(detected_type);
             // If there are no streams or stream type is different, create a new streams entry.
