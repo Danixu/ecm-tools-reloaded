@@ -1,18 +1,18 @@
 [submodule "zlib"]
-	path = libs/zlib
+	path = external/zlib
 	url = https://github.com/Danixu/zlib.git
 [submodule "xz"]
-	path = libs/xz
+	path = external/xz
 	url = https://git.tukaani.org/xz.git
 [submodule "lz4"]
-	path = libs/lz4
+	path = external/lz4
 	url = https://github.com/lz4/lz4.git
 [submodule "lzlib4"]
-	path = libs/lzlib4
+	path = external/lzlib4
 	url = https://github.com/Danixu/lzlib4.git
 [submodule "flac"]
-	path = libs/flac
+	path = external/flac
 	url = https://github.com/xiph/flac.git
 [submodule "flaczlib"]
-	path = libs/flaczlib
+	path = external/flaczlib
 	url = https://github.com/Danixu/flaczlib.git
