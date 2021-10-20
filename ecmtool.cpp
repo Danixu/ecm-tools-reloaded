@@ -86,7 +86,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    // Check if the file is an ECM3 File
+    // Check if the file is an ECM2v3 File
     {
         char file_format[5];
         in_file.read(file_format, 4);
@@ -940,7 +940,7 @@ static ecmtool_return_code disk_encode (
                 }
 
                 in_file.read(reinterpret_cast<char*>(in_sector), 2352);
-                // Compute the crc of the readed data 
+                // Compute the crc of the readed data
                 input_edc = sTools->edc_compute(
                     input_edc,
                     in_sector,

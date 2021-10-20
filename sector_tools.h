@@ -137,8 +137,8 @@ enum sector_tools_stream_types : uint8_t {
 //
 enum optimization_options : uint8_t {
     OO_NONE                  = 0,    // Just copy the input. Surelly will not be used
-    OO_REMOVE_SYNC           = 1, // Remove sync bytes (a.k.a first 12 bytes)
-    OO_REMOVE_MSF           = 1<<1, // Remove the MSF bytes
+    OO_REMOVE_SYNC           = 1,    // Remove sync bytes (a.k.a first 12 bytes)
+    OO_REMOVE_MSF            = 1<<1, // Remove the MSF bytes
     OO_REMOVE_MODE           = 1<<2, // Remove the MODE byte
     OO_REMOVE_BLANKS         = 1<<3, // If sector type is a GAP, remove the data
     OO_REMOVE_REDUNDANT_FLAG = 1<<4, // Remove the redundant copy of FLAG bytes in Mode 2 XA sectors
