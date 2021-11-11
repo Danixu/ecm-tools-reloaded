@@ -5,7 +5,7 @@ ifeq ($(ECM_DEBUG), true)
 	COMP_OPT+= -g
 	COMP_OPT_LINUX+= -fsanitize=address
 else
-	COMP_OPT+= -O2 -s
+	COMP_OPT+= -Os -s
 endif
 
 all: ecmtool ecmtool.exe
@@ -74,7 +74,7 @@ ecmtool.exe:
 
 	# Compile the Win64 release
 	mkdir -p release/win64
-	x86_64-w64-mingw32-g++ ${COMP_OPT} -o release/win64/$@ ecmtool.cpp compressor.cpp sector_tools.cpp -lzwindows -llzma lz4/lib/lz4hc.c lz4/lib/lz4.c lzlib4/lzlib4.cpp flaczlib/flaczlib.cpp flac/src/libFLAC/.libs/libFLAC-static.a
+	x86_64-w64-mingw32-g++ ${COMP_OPT} -static -o release/win64/$@ ecmtool.cpp compressor.cpp sector_tools.cpp -lzwindows -llzma lz4/lib/lz4hc.c lz4/lib/lz4.c lzlib4/lzlib4.cpp flaczlib/flaczlib.cpp flac/src/libFLAC/.libs/libFLAC-static.a
 
 	########## ZLIB CLEAN ##########
 	# Clean the zlib directory at end
@@ -89,14 +89,6 @@ ecmtool.exe:
 	########## FLAC CLEAN ##########
 	make -C flac clean
 	########## END FLAC CLEAN ##########
-
-.PHONY: install
-
-install:
-	install -dm 755 $(DESTDIR)/usr/bin
-	install -m 755 ecmtool $(DESTDIR)/usr/bin/
-
-.PHONY: clean
 
 clean:
 	rm -f ecmtool.o
