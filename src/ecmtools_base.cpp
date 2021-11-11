@@ -112,6 +112,58 @@ ecmtools::base::~base() {
  * @return uint64_t Returns the position where the block can be stored
  */
 uint64_t ecmtools::base::find_space_for_block(int16_t block_index, uint64_t block_size) {
+    log.debug("Finding a new space for the block with size %d bytes\n", block_size);
+
+    // check if file is in a correct state
+    if (file.fail()) {
+        // File is in fail state, so 0 will be returned
+        log.error("File is in error state, so I cannot continue.\n");
+        _file_status = ECMTOOLS_STATUS_ECM_FILE_ERROR;
+        return 0;
+    }
+
+    // No toc in file, so new block will be written to the end of file
+    if (_file_toc_pos == 0) {
+        log.debug("There is no toc block, so file must be new. The new block will be at the end of file.\n");
+        size_t current_pos = file.tellg();
+        if (file.fail()) {
+            // File is in fail state, so 0 will be returned
+            log.error("There was an error getting the current file position.\n");
+            _file_status = ECMTOOLS_STATUS_ECM_FILE_ERROR;
+            return 0;
+        }
+        log.debug("Current file position: %lld. Seeking to the end of file.\n", current_pos);
+        file.seekg(0, std::ios::end);
+        if (file.fail()) {
+            // File is in fail state, so 0 will be returned
+            log.error("There was an error seeking to the end of file.\n");
+            _file_status = ECMTOOLS_STATUS_ECM_FILE_ERROR;
+            return 0;
+        }
+        size_t end_of_file = file.tellg();
+        if (file.fail()) {
+            // File is in fail state, so 0 will be returned
+            log.error("There was an error getting the end of file position.\n");
+            _file_status = ECMTOOLS_STATUS_ECM_FILE_ERROR;
+            return 0;
+        }
+        log.debug("The end of file is at %lld. Going back to the las position.\n", end_of_file);
+        file.seekg(current_pos);
+        if (file.fail()) {
+            // File is in fail state, so 0 will be returned
+            log.error("There was an error going back to the last file position.\n");
+            _file_status = ECMTOOLS_STATUS_ECM_FILE_ERROR;
+            return 0;
+        }
+        return end_of_file;
+    }
+
+    // Toc exists, but is empty
+    if (file_toc.size() == 0) {
+        // then the TOC position is returned
+        log.debug("File TOC exists, but is empty. Returning the TOC position for the new block: %lld.\n", _file_toc_pos);
+        return _file_toc_pos;
+    }
 
     // First we will try to store the block in the same position if fits.
     if (block_index >= 0) {
@@ -153,6 +205,8 @@ uint64_t ecmtools::base::find_space_for_block(int16_t block_index, uint64_t bloc
     // If none of the above is able to find a hole, then use the EOF Block position A.K.A TOC Position
     // TOC Block will be rewritten and then must be written again at end of file (check it on write function)
     return _file_toc_pos;
+
+   return 0;
 }
 
 /**

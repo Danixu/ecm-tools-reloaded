@@ -28,6 +28,7 @@ namespace ecmtools
             ecmtools::ecmtools_status write_metadata();
 
         private:
+            bool _writing_image = false;
         
     };
 }

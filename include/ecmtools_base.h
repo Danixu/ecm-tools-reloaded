@@ -19,7 +19,7 @@
 
 #include <fstream>
 #include <iostream>
-#include <cstring>
+#include <string>
 #include <vector>
 #include <algorithm>
 
@@ -173,7 +173,7 @@ namespace ecmtools
             // Methods
             base(std::string filename, std::fstream::openmode file_open_mode = std::fstream::in | std::fstream::binary);
             ~base();
-            simplelogger::logger log = simplelogger::logger(1); // Used to log to console
+            simplelogger::logger log = simplelogger::logger(simplelogger::SIMPLELOGGER_LEVEL_DEBUG); // Used to log to console
             uint64_t find_space_for_block(int16_t block_index, uint64_t block_size);
             int write_block(char * block_data, uint64_t block_size, ecmtools_compression compression = ECMTOOLS_COMPRESSION_ZLIB);
 

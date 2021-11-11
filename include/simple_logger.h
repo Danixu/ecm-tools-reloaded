@@ -17,9 +17,13 @@
  *
  ******************************************************************************/
 
-#include <stdint.h>
-#include <string>
-#include <time.h>
+//#include <cstdint>
+#include <cstdio>
+#include <cstdarg>
+//#include <ctime>
+
+#ifndef _H_SIMPLELOGGER_LOADED
+#define _H_SIMPLELOADER_LOADED
 
 namespace simplelogger {
     enum loglevel {
@@ -35,38 +39,19 @@ namespace simplelogger {
             uint8_t _log_level;
 
         public:
-            logger(uint8_t log_level = 0);
-            void set_log_level(uint8_t log_level);
-            void log(std::string message, loglevel log_level);
-            void log(char * message, loglevel log_level);
+            logger(loglevel log_level = (loglevel)0);
+            void set_log_level(loglevel log_level);
+            // With and without format
+            void log(loglevel log_level, const char * format, ...);
+            void log(loglevel log_level, const char * format, va_list args);
+            // Wrappers
+            //void info(const char * format);
+            void info(const char * format, ...);
+            void warning(const char * format, ...);
+            void error(const char * format, ...);
+            void debug(const char * format, ...);
+
     };
 }
 
-simplelogger::logger::logger(uint8_t log_level) {
-    _log_level = log_level;
-}
-
-void simplelogger::logger::set_log_level(uint8_t log_level) {
-    _log_level = log_level;
-}
-
-void simplelogger::logger::log(std::string message, loglevel log_level) {
-    log(message.c_str(), log_level);
-}
-
-void simplelogger::logger::log(char * message, loglevel log_level) {
-    if (log_level >= _log_level) {
-        time_t rawtime;
-        struct tm * timeinfo;
-
-        time(&rawtime);
-        timeinfo = localtime(&rawtime);
-
-        if (log_level == SIMPLELOGGER_LEVEL_ERROR) {
-            fprintf_s(stderr, "%s: %s", asctime(timeinfo), message);
-        }
-        else {
-            fprintf_s(stdout, "%s: %s", asctime(timeinfo), message);
-        }
-    }
-}
+#endif
